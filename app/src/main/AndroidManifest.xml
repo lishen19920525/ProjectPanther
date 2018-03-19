@@ -16,6 +16,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <meta-data
+            android:name="io.panther.PantherModule"
+            android:value="io.panther.demo.DemoPantherModule" />
     </application>
-
 </manifest>
