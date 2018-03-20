@@ -177,10 +177,10 @@ public final class Panther {
             synchronized (database) {
                 database.put(key, dataBundleJson);
             }
-            log(dataBundle.toString() + "\n saved in database finished");
+            log("{ " + key + " = " + String.valueOf(data) + " }" + "\n saved in database finished");
             return true;
         } catch (Exception e) {
-            logError("{key=" + key + "} save data in database failed");
+            logError("{ " + key + " = " + String.valueOf(data) + " } save in database failed");
             return false;
         }
     }
@@ -219,7 +219,7 @@ public final class Panther {
                 dataBundleJson = database.get(key);
             }
         } catch (Exception e) {
-            logError("read {key=" + key + "} from database failed");
+            logError("read { key = " + key + " } from database failed");
             return dataBundle;
         }
         dataBundleJson = GZIP.decompress(dataBundleJson);
@@ -255,7 +255,7 @@ public final class Panther {
                     try {
                         dataBundle.setData(JSON.parseArray(dataJson, dataClass));
                     } catch (Exception e) {
-                        logError("read {key=" + key + "} from database parse failed");
+                        logError("read { key = " + key + " } from database parse failed");
                         return dataBundle;
                     }
                 } else {
@@ -263,13 +263,13 @@ public final class Panther {
                     try {
                         dataBundle.setData(JSON.parseObject(dataJson, dataClass));
                     } catch (Exception e) {
-                        logError("read {key=" + key + "} from database parse failed");
+                        logError("read { key = " + key + " } from database parse failed");
                         return dataBundle;
                     }
                 }
             }
         } else {
-            logError("read {key=" + key + "} from database failed");
+            logError("read { key = " + key + " } from database failed");
             return dataBundle;
         }
         log(dataBundle + "\n read from database finished");
@@ -391,10 +391,10 @@ public final class Panther {
             synchronized (database) {
                 database.del(key);
             }
-            log("{key=" + key + "}\n delete from database finished");
+            log("{ key = " + key + " }\n delete from database finished");
             return true;
         } catch (Exception e) {
-            logError("{key=" + key + "}\n delete from database failed");
+            logError(" { key = " + key + " }\n delete from database failed");
             return false;
         }
     }
@@ -439,7 +439,7 @@ public final class Panther {
             }
         } catch (Exception ignore) {
         }
-        log("{key=" + key + "} exist=" + exist);
+        log("{ key = " + key + " } exist = " + exist);
         return exist;
     }
 
@@ -462,7 +462,7 @@ public final class Panther {
         if (keys == null) {
             keys = new String[]{};
         }
-        log("{prefix=" + prefix + "} has " + keys.length + " keys");
+        log("{ prefix = " + prefix + " } has " + keys.length + " keys");
         return keys;
     }
 
@@ -492,7 +492,7 @@ public final class Panther {
         } else {
             memoryCacheMap.put(key, new WeakReference<>(data));
         }
-        log("{key=" + key + " data=" + data + "}\nsave in memory finished");
+        log("{ key = " + key + " data = " + data + " }\nsave in memory finished");
         log("memory cache size: " + memoryCacheMap.size());
     }
 
@@ -523,7 +523,7 @@ public final class Panther {
                 data = dataReference.get();
             }
         }
-        log("{key=" + key + " data=" + data + "}\nread from memory finished");
+        log("{ key = " + key + " data = " + data + " }\nread from memory finished");
         return data;
     }
 
@@ -544,7 +544,7 @@ public final class Panther {
      */
     public void deleteFromMemory(String key) {
         memoryCacheMap.delete(key);
-        log("{key=" + key + "}\ndelete from memory finished");
+        log("{ key = " + key + " }\ndelete from memory finished");
         log("memory cache size: " + memoryCacheMap.size());
     }
 
