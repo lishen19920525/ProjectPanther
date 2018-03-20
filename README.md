@@ -2,7 +2,7 @@
 A concise and quick Android KV database ( based on [SnappyDB](https://github.com/nhachicha/SnappyDB) )
 
 # How to use
-### 1.Download aar
+### 1. Download aar
 Latest release version: [v0.0.1](https://github.com/lishen19920525/ProjectPanther/releases/download/v0.0.1/panther-v0.0.1.aar)
 </br>
 Put aar file into your project
@@ -14,7 +14,7 @@ And add some dependencies into your gradle
   api 'com.alibaba:fastjson:1.2.40'
 ```
 
-### 2.Configure the Panther
+### 2. Configure the Panther
 Implement the PantherModule interface in a class with public visibility
 ```java
 public class DemoPantherModule implements PantherModule {
@@ -27,16 +27,16 @@ public class DemoPantherModule implements PantherModule {
     }
 }
 ```
-Add your implementation to your list of keeps in your proguard.cfg file:
+Add your implementation to your list of keeps in your proguard.cfg file
 ```
 -keepnames class com.xxx.xxx.xxx.xxx.DemoPantherModule
 -keep class io.panther.**{*;}
 ```
-Add a metadata tag to your AndroidManifest.xml with your PantherModule implementation's fully qualified classname as the value, and "io.panther.PantherModule" as the key:
+Add a metadata tag to your AndroidManifest.xml with your PantherModule implementation's fully qualified classname as the value, and "io.panther.PantherModule" as the key
 ```xml
 <meta-data
    android:name="io.panther.PantherModule"
    android:value="com.xxx.xxx.xxx.xxx.DemoPantherModule" />
 ```
-### 3.Enjoy it
+### 3. Enjoy it
 Please refer to [Demo](https://github.com/lishen19920525/ProjectPanther/tree/master/app/src/main/java/io/panther/demo) for specific usage
