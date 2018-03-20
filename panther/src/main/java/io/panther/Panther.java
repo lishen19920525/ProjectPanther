@@ -173,10 +173,11 @@ public final class Panther {
             dataBundle.setData(data);
             dataBundle.setUpdateTime(System.currentTimeMillis());
             String dataBundleJson = JSON.toJSONString(dataBundle);
+            dataBundleJson = GZIP.compress(dataBundleJson);
             synchronized (database) {
                 database.put(key, dataBundleJson);
             }
-            log(dataBundleJson + "\n saved in database finished");
+            log(dataBundle.toString() + "\n saved in database finished");
             return true;
         } catch (Exception e) {
             logError("{key=" + key + "} save data in database failed");
@@ -221,6 +222,7 @@ public final class Panther {
             logError("read {key=" + key + "} from database failed");
             return dataBundle;
         }
+        dataBundleJson = GZIP.decompress(dataBundleJson);
         // data parse
         JSONObject dataBundleJsonObject = null;
         try {

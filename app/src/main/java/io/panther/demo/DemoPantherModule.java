@@ -14,7 +14,7 @@ public class DemoPantherModule implements PantherModule {
     @Override
     public PantherConfiguration applyConfiguration(Context context) {
         return new PantherConfiguration.Builder(context)
-                .logEnabled(true)
+                .logEnabled(false)
                 .databaseName("PantherDemo")
                 .build();
     }
