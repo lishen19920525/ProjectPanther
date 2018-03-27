@@ -26,12 +26,14 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.serializer.ValueFilter;
 import com.snappydb.DB;
 import com.snappydb.DBFactory;
 
 import org.json.JSONObject;
 
 import java.lang.ref.WeakReference;
+import java.math.BigDecimal;
 
 import io.panther.bundle.DataBundle;
 import io.panther.bundle.DeleteBundle;
@@ -58,8 +60,19 @@ public final class Panther {
     private MainHandler mainHandler;
     private HandlerThread workThread;
     private WorkHandler workHandler;
+    private ValueFilter jsonParseValueFilter;
 
     private Panther(PantherConfiguration pantherConfiguration) {
+        jsonParseValueFilter = new ValueFilter() {
+            @Override
+            public Object process(Object object, String name, Object value) {
+                if (value instanceof BigDecimal || value instanceof Double || value instanceof Float) {
+                    return new BigDecimal(value.toString()).toPlainString();
+                }
+                return value;
+            }
+        };
+
         configuration = pantherConfiguration;
         log("========== Panther configuration =========="
                 + "\ndatabase folder: " + configuration.databaseFolder.getAbsolutePath()
@@ -172,15 +185,15 @@ public final class Panther {
             dataBundle.setKey(key);
             dataBundle.setData(data);
             dataBundle.setUpdateTime(System.currentTimeMillis());
-            String dataBundleJson = JSON.toJSONString(dataBundle);
-            dataBundleJson = GZIP.compress(dataBundleJson);
+            String dataBundleJson = JSON.toJSONString(dataBundle, jsonParseValueFilter);
+            String dataBundleJsonCompressed = GZIP.compress(dataBundleJson);
             synchronized (database) {
-                database.put(key, dataBundleJson);
+                database.put(key, dataBundleJsonCompressed);
             }
-            log("{ " + key + " = " + String.valueOf(data) + " }" + "\n saved in database finished");
+            log("key = " + key + "\nvalue = " + dataBundleJson + "\n saved in database finished");
             return true;
         } catch (Exception e) {
-            logError("{ " + key + " = " + String.valueOf(data) + " } save in database failed");
+            logError("key = " + key + "\nvalue = " + String.valueOf(data) + "\nsave in database failed");
             return false;
         }
     }
@@ -223,6 +236,9 @@ public final class Panther {
             return dataBundle;
         }
         dataBundleJson = GZIP.decompress(dataBundleJson);
+        if (!TextUtils.isEmpty(dataBundleJson)) {
+            log("key = " + key + "\ndata bundle: " + dataBundleJson + "\nread from database success");
+        }
         // data parse
         JSONObject dataBundleJsonObject = null;
         try {
@@ -677,7 +693,7 @@ public final class Panther {
 
     private void log(String content) {
         if (configuration.logEnabled)
-            Log.d("Panther", content);
+            Log.i("Panther", content);
     }
 
     private void logError(String content) {
