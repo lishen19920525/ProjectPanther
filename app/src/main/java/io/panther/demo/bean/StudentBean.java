@@ -1,4 +1,4 @@
-package io.panther.demo;
+package io.panther.demo.bean;
 
 import java.util.Date;
 

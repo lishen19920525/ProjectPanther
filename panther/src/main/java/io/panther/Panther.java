@@ -30,12 +30,11 @@ import com.alibaba.fastjson.serializer.ValueFilter;
 import com.snappydb.DB;
 import com.snappydb.DBFactory;
 
-import org.json.JSONObject;
-
 import java.lang.ref.WeakReference;
 import java.math.BigDecimal;
 
 import io.panther.bundle.DataBundle;
+import io.panther.bundle.DataJsonBundle;
 import io.panther.bundle.DeleteBundle;
 import io.panther.bundle.FindKeysByPrefixBundle;
 import io.panther.bundle.MassDeleteBundle;
@@ -185,14 +184,21 @@ public final class Panther {
             dataBundle.setKey(key);
             dataBundle.setData(data);
             dataBundle.setUpdateTime(System.currentTimeMillis());
+            long milestone = System.currentTimeMillis();
             String dataBundleJson = JSON.toJSONString(dataBundle, jsonParseValueFilter);
+            log("write to JSON cost time: " + (System.currentTimeMillis() - milestone));
+            milestone = System.currentTimeMillis();
             String dataBundleJsonCompressed = GZIP.compress(dataBundleJson);
+            log("write compress cost time: " + (System.currentTimeMillis() - milestone));
+            milestone = System.currentTimeMillis();
             synchronized (database) {
                 database.put(key, dataBundleJsonCompressed);
+                log("write put cost time: " + (System.currentTimeMillis() - milestone));
             }
             log("key = " + key + "\nvalue = " + dataBundleJson + "\n saved in database finished");
             return true;
         } catch (Exception e) {
+            e.printStackTrace();
             logError("key = " + key + "\nvalue = " + String.valueOf(data) + "\nsave in database failed");
             return false;
         }
@@ -226,59 +232,79 @@ public final class Panther {
         dataBundle.setKey(key);
         // data bundle json
         String dataBundleJson;
+        long milestone = System.currentTimeMillis();
         try {
             databaseOperationPreCheck(key);
+            milestone = System.currentTimeMillis();
             synchronized (database) {
                 dataBundleJson = database.get(key);
+                log("read get cost time: " + (System.currentTimeMillis() - milestone));
+                milestone = System.currentTimeMillis();
             }
         } catch (Exception e) {
             logError("read { key = " + key + " } from database failed");
+            e.printStackTrace();
             return dataBundle;
         }
         dataBundleJson = GZIP.decompress(dataBundleJson);
+        log("read decompress cost time: " + (System.currentTimeMillis() - milestone));
         if (!TextUtils.isEmpty(dataBundleJson)) {
             log("key = " + key + "\ndata bundle: " + dataBundleJson + "\nread from database success");
         }
-        // data parse
-        JSONObject dataBundleJsonObject = null;
+
+        DataJsonBundle dataJsonBundle = new DataJsonBundle();
         try {
-            dataBundleJsonObject = new JSONObject(dataBundleJson);
-        } catch (Exception ignore) {
+            dataJsonBundle = JSON.parseObject(dataBundleJson, DataJsonBundle.class);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        if (dataBundleJsonObject != null) {
+
+        // data parse
+//        JSONObject dataBundleJsonObject = null;
+//        try {
+//            milestone = System.currentTimeMillis();
+//            dataBundleJsonObject = new JSONObject(dataBundleJson);
+//            log("read decompress new JSONObject  time: " + (System.currentTimeMillis() - milestone));
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+//        milestone = System.currentTimeMillis();
+        if (!TextUtils.isEmpty(dataJsonBundle.getData())) {
             // update time
             try {
-                dataBundle.setUpdateTime(dataBundleJsonObject.getLong(Constant.JSON_KEY_UPDATE_TIME));
+                dataBundle.setUpdateTime(dataJsonBundle.getUpdateTime());
             } catch (Exception ignore) {
             }
             // data json
-            String dataJson = null;
-            try {
-                dataJson = dataBundleJsonObject.getString(Constant.JSON_KEY_DATA);
-            } catch (Exception ignore) {
-            }
-            if (TextUtils.isEmpty(dataJson)) {
-                dataJson = "";
-            }
-            dataBundle.setDataJson(dataJson);
+//            String dataJson = null;
+//            try {
+//                dataJson = dataBundleJsonObject.getString(Constant.JSON_KEY_DATA);
+//            } catch (Exception ignore) {
+//            }
+//            if (TextUtils.isEmpty(dataJson)) {
+//                dataJson = "";
+//            }
+            dataBundle.setDataJson(dataJsonBundle.getData());
             // data parse
             if (dataClass == String.class) {
                 // String.class
-                dataBundle.setData(dataJson);
-            } else if (!TextUtils.isEmpty(dataJson)) {
-                if (dataJson.startsWith(Constant.JSON_ARRAY_PREFIX)) {
+                dataBundle.setData(dataBundle.getDataJson());
+            } else {
+                if (dataBundle.getDataJson().startsWith(Constant.JSON_ARRAY_PREFIX)) {
                     // parse to array
                     try {
-                        dataBundle.setData(JSON.parseArray(dataJson, dataClass));
+                        dataBundle.setData(JSON.parseArray(dataBundle.getDataJson(), dataClass));
                     } catch (Exception e) {
+                        e.printStackTrace();
                         logError("read { key = " + key + " } from database parse failed");
                         return dataBundle;
                     }
                 } else {
                     // parse to object
                     try {
-                        dataBundle.setData(JSON.parseObject(dataJson, dataClass));
+                        dataBundle.setData(JSON.parseObject(dataBundle.getDataJson(), dataClass));
                     } catch (Exception e) {
+                        e.printStackTrace();
                         logError("read { key = " + key + " } from database parse failed");
                         return dataBundle;
                     }
@@ -289,6 +315,7 @@ public final class Panther {
             return dataBundle;
         }
         log(dataBundle + "\n read from database finished");
+        log("read parse cost time: " + (System.currentTimeMillis() - milestone));
         return dataBundle;
     }
 
