@@ -34,6 +34,7 @@ import java.lang.ref.WeakReference;
 import java.lang.reflect.Type;
 import java.util.List;
 
+import io.panther.bundle.BaseBundle;
 import io.panther.bundle.DeleteBundle;
 import io.panther.bundle.FindKeysByPrefixBundle;
 import io.panther.bundle.MassDeleteBundle;
@@ -45,7 +46,8 @@ import io.panther.callback.MassDeleteCallback;
 import io.panther.callback.ReadCallback;
 import io.panther.callback.SaveCallback;
 import io.panther.constant.Constant;
-import io.panther.memorycache.MemoryCacheMap;
+import io.panther.memorycache.PantherArrayMap;
+import io.panther.memorycache.PantherMemoryCacheMap;
 import io.panther.util.ConfigurationParser;
 import io.panther.util.GZIP;
 
@@ -56,12 +58,18 @@ import io.panther.util.GZIP;
 @SuppressWarnings("unchecked")
 public final class Panther {
     private static volatile Panther panther;
+
     private PantherConfiguration configuration;
-    private MemoryCacheMap memoryCacheMap;
+
     private static volatile DB database;
+    private static volatile PantherArrayMap<String, BaseBundle> dataMedium;
+
+    private PantherMemoryCacheMap memoryCacheMap;
+
     private MainHandler mainHandler;
     private HandlerThread workThread;
     private WorkHandler workHandler;
+
     private Gson GSON;
 
     private Panther(PantherConfiguration configuration) {
@@ -75,7 +83,7 @@ public final class Panther {
                 + "\nmemory cache size: " + configuration.memoryCacheSize
                 + "\n===========================================");
         // memory cache
-        memoryCacheMap = new MemoryCacheMap(configuration.memoryCacheSize);
+        memoryCacheMap = new PantherMemoryCacheMap(configuration.memoryCacheSize);
         // open database when PANTHER init
         openDatabase();
     }
@@ -119,7 +127,12 @@ public final class Panther {
     public void openDatabase() {
         try {
             if (database != null && database.isOpen()) {
-                closeDatabase();
+                log("database: " + configuration.databaseName + " already open, no need to open again");
+                return;
+            }
+            // read and save cache
+            synchronized (this) {
+                dataMedium = new PantherArrayMap();
             }
             synchronized (DB.class) {
                 database = DBFactory.open(configuration.databaseFolder.getAbsolutePath(),
@@ -197,9 +210,9 @@ public final class Panther {
      * @param callback callback
      */
     public void writeInDatabaseAsync(String key, Object data, SaveCallback callback) {
-        Message msg = getWorkHandler().obtainMessage(Constant.MSG_WORK_SAVE);
-        msg.obj = new SaveBundle(key, data, callback);
-        getWorkHandler().sendMessage(msg);
+        SaveBundle saveBundle = new SaveBundle(key, data, callback);
+        dataMedium.put(Constant.SAVE_KEY_PREFIX + key, saveBundle);
+        callOnWorkHandler(Constant.MSG_WORK_SAVE, key);
     }
 
 
@@ -265,9 +278,9 @@ public final class Panther {
      * @param callback  callback
      */
     public void readFromDatabaseAsync(String key, Class dataClass, ReadCallback callback) {
-        Message msg = getWorkHandler().obtainMessage(Constant.MSG_WORK_READ);
-        msg.obj = new ReadBundle(key, dataClass, callback);
-        getWorkHandler().sendMessage(msg);
+        ReadBundle readBundle = new ReadBundle(key, dataClass, callback);
+        dataMedium.put(Constant.READ_KEY_PREFIX + key, readBundle);
+        callOnWorkHandler(Constant.MSG_WORK_READ, key);
     }
 
     /**
@@ -389,9 +402,9 @@ public final class Panther {
      * @param callback callback
      */
     public void deleteFromDatabaseAsync(String key, DeleteCallback callback) {
-        Message msg = getWorkHandler().obtainMessage(Constant.MSG_WORK_DELETE);
-        msg.obj = new DeleteBundle(key, callback);
-        getWorkHandler().sendMessage(msg);
+        DeleteBundle deleteBundle = new DeleteBundle(key, callback);
+        dataMedium.put(Constant.DELETE_KEY_PREFIX + key, deleteBundle);
+        callOnWorkHandler(Constant.MSG_WORK_DELETE, key);
     }
 
     /**
@@ -401,9 +414,16 @@ public final class Panther {
      * @param callback callback
      */
     public void massDeleteFromDatabaseAsync(String[] keys, MassDeleteCallback callback) {
-        Message msg = getWorkHandler().obtainMessage(Constant.MSG_WORK_MASS_DELETE);
-        msg.obj = new MassDeleteBundle(keys, callback);
-        getWorkHandler().sendMessage(msg);
+        if (keys != null && keys.length > 0) {
+            String key = String.valueOf(System.currentTimeMillis());
+            MassDeleteBundle massDeleteBundle = new MassDeleteBundle(keys, callback);
+            dataMedium.put(Constant.MASS_DELETE_KEY_PREFIX + key, massDeleteBundle);
+            callOnWorkHandler(Constant.MSG_WORK_MASS_DELETE, key);
+        } else {
+            if (callback != null) {
+                callback.onResult(false);
+            }
+        }
     }
 
 
@@ -455,9 +475,10 @@ public final class Panther {
      * @param callback callback
      */
     public void findKeysByPrefix(String prefix, FindKeysCallback callback) {
-        Message msg = getWorkHandler().obtainMessage(Constant.MSG_WORK_FIND_KEYS_BY_PREFIX);
-        msg.obj = new FindKeysByPrefixBundle(prefix, callback);
-        getWorkHandler().sendMessage(msg);
+        String key = String.valueOf(System.currentTimeMillis());
+        FindKeysByPrefixBundle findKeysByPrefixBundle = new FindKeysByPrefixBundle(prefix, callback);
+        dataMedium.put(Constant.FIND_KEYS_BY_PREFIX_KEY_PREFIX + key, findKeysByPrefixBundle);
+        callOnWorkHandler(Constant.MSG_WORK_FIND_KEYS_BY_PREFIX, key);
     }
 
 
@@ -499,8 +520,25 @@ public final class Panther {
         Object data = null;
         if (strongly) {
             data = memoryCacheMap.get(key);
+            if (data instanceof WeakReference) {
+                data = null;
+                try {
+                    throw new IllegalArgumentException("You may have chosen the wrong reference type");
+                } catch (IllegalArgumentException e) {
+                    e.printStackTrace();
+                }
+            }
         } else {
-            WeakReference<Object> dataReference = (WeakReference<Object>) memoryCacheMap.get(key);
+            WeakReference<Object> dataReference = null;
+            try {
+                dataReference = (WeakReference<Object>) memoryCacheMap.get(key);
+            } catch (Exception ignore) {
+                try {
+                    throw new IllegalArgumentException("You may have chosen the wrong reference type");
+                } catch (IllegalArgumentException e) {
+                    e.printStackTrace();
+                }
+            }
             if (dataReference != null) {
                 data = dataReference.get();
             }
@@ -548,44 +586,74 @@ public final class Panther {
     }
 
     /**
+     * Send message to work handler
+     *
+     * @param message message
+     * @param key     key with event prefix
+     */
+    private void callOnWorkHandler(int message, String key) {
+        Message msg = getWorkHandler().obtainMessage(message);
+        msg.obj = key;
+        getWorkHandler().sendMessage(msg);
+    }
+
+    /**
      * Handle job in main thread
      *
      * @param msg msg
      */
     private void handleMainMessage(Message msg) {
+        String key = (String) msg.obj;
         switch (msg.what) {
             case Constant.MSG_MAIN_SAVE_CALLBACK:
-                SaveBundle saveBundle = (SaveBundle) msg.obj;
+                SaveBundle saveBundle = (SaveBundle) dataMedium.get(Constant.SAVE_KEY_PREFIX + key);
                 if (saveBundle != null && saveBundle.callback != null) {
+                    dataMedium.remove(Constant.SAVE_KEY_PREFIX + key);
                     saveBundle.callback.onResult(saveBundle.success);
                 }
                 break;
             case Constant.MSG_MAIN_READ_CALLBACK:
-                ReadBundle readBundle = (ReadBundle) msg.obj;
+                ReadBundle readBundle = (ReadBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
                 if (readBundle != null && readBundle.callback != null) {
+                    dataMedium.remove(Constant.READ_KEY_PREFIX + key);
                     boolean success = readBundle.data != null;
                     readBundle.callback.onResult(success, readBundle.data);
                 }
                 break;
             case Constant.MSG_MAIN_DELETE_CALLBACK:
-                DeleteBundle deleteBundle = (DeleteBundle) msg.obj;
+                DeleteBundle deleteBundle = (DeleteBundle) dataMedium.get(Constant.DELETE_KEY_PREFIX + key);
                 if (deleteBundle != null && deleteBundle.callback != null) {
+                    dataMedium.remove(Constant.DELETE_KEY_PREFIX + key);
                     deleteBundle.callback.onResult(deleteBundle.success);
                 }
                 break;
             case Constant.MSG_MAIN_MASS_DELETE_CALLBACK:
-                MassDeleteBundle massDeleteBundle = (MassDeleteBundle) msg.obj;
+                MassDeleteBundle massDeleteBundle = (MassDeleteBundle) dataMedium.get(Constant.MASS_DELETE_KEY_PREFIX + key);
                 if (massDeleteBundle != null && massDeleteBundle.callback != null) {
+                    dataMedium.remove(Constant.MASS_DELETE_KEY_PREFIX + key);
                     massDeleteBundle.callback.onResult(massDeleteBundle.success);
                 }
                 break;
             case Constant.MSG_MAIN_FIND_KEYS_BY_PREFIX_CALLBACK:
-                FindKeysByPrefixBundle findKeysByPrefixBundle = (FindKeysByPrefixBundle) msg.obj;
+                FindKeysByPrefixBundle findKeysByPrefixBundle = (FindKeysByPrefixBundle) dataMedium.get(Constant.FIND_KEYS_BY_PREFIX_KEY_PREFIX + key);
                 if (findKeysByPrefixBundle != null && findKeysByPrefixBundle.callback != null) {
+                    dataMedium.remove(Constant.FIND_KEYS_BY_PREFIX_KEY_PREFIX + key);
                     findKeysByPrefixBundle.callback.onResult(findKeysByPrefixBundle.keys);
                 }
                 break;
         }
+    }
+
+    /**
+     * Send message to work handler
+     *
+     * @param message message
+     * @param key     key with event prefix
+     */
+    private void callOnMainHandler(int message, String key) {
+        Message msg = getMainHandler().obtainMessage(message);
+        msg.obj = key;
+        getMainHandler().sendMessage(msg);
     }
 
     /**
@@ -594,46 +662,40 @@ public final class Panther {
      * @param msg msg
      */
     private void handleWorkMessage(Message msg) {
-        Message m;
+        String key = (String) msg.obj;
         switch (msg.what) {
             case Constant.MSG_WORK_SAVE:
-                SaveBundle saveBundle = (SaveBundle) msg.obj;
+                SaveBundle saveBundle = (SaveBundle) dataMedium.get(Constant.SAVE_KEY_PREFIX + key);
                 saveBundle.success = writeInDatabase(saveBundle.key, saveBundle.data);
-                m = getMainHandler().obtainMessage(Constant.MSG_MAIN_SAVE_CALLBACK);
-                m.obj = saveBundle;
+                callOnMainHandler(Constant.MSG_MAIN_SAVE_CALLBACK, key);
                 break;
             case Constant.MSG_WORK_READ:
-                ReadBundle readBundle = (ReadBundle) msg.obj;
+                ReadBundle readBundle = (ReadBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
                 readBundle.data = readFromDatabase(readBundle.key, readBundle.dataClass);
-                m = getMainHandler().obtainMessage(Constant.MSG_MAIN_READ_CALLBACK);
-                m.obj = readBundle;
+                callOnMainHandler(Constant.MSG_MAIN_READ_CALLBACK, key);
                 break;
             case Constant.MSG_WORK_DELETE:
-                DeleteBundle deleteBundle = (DeleteBundle) msg.obj;
+                DeleteBundle deleteBundle = (DeleteBundle) dataMedium.get(Constant.DELETE_KEY_PREFIX + key);
                 deleteBundle.success = deleteFromDatabase(deleteBundle.key);
-                m = getMainHandler().obtainMessage(Constant.MSG_MAIN_DELETE_CALLBACK);
-                m.obj = deleteBundle;
+                callOnMainHandler(Constant.MSG_MAIN_DELETE_CALLBACK, key);
                 break;
             case Constant.MSG_WORK_MASS_DELETE:
-                MassDeleteBundle massDeleteBundle = (MassDeleteBundle) msg.obj;
-                for (String key : massDeleteBundle.keys) {
-                    if (deleteFromDatabase(key)) {
+                MassDeleteBundle massDeleteBundle = (MassDeleteBundle) dataMedium.get(Constant.MASS_DELETE_KEY_PREFIX + key);
+                for (String k : massDeleteBundle.keys) {
+                    if (deleteFromDatabase(k)) {
                         massDeleteBundle.success = true;
                     }
                 }
-                m = getMainHandler().obtainMessage(Constant.MSG_MAIN_MASS_DELETE_CALLBACK);
-                m.obj = massDeleteBundle;
+                callOnMainHandler(Constant.MSG_MAIN_MASS_DELETE_CALLBACK, key);
                 break;
             case Constant.MSG_WORK_FIND_KEYS_BY_PREFIX:
-                FindKeysByPrefixBundle findKeysByPrefixBundle = (FindKeysByPrefixBundle) msg.obj;
+                FindKeysByPrefixBundle findKeysByPrefixBundle = (FindKeysByPrefixBundle) dataMedium.get(Constant.FIND_KEYS_BY_PREFIX_KEY_PREFIX + key);
                 findKeysByPrefixBundle.keys = findKeysByPrefix(findKeysByPrefixBundle.prefix);
-                m = getMainHandler().obtainMessage(Constant.MSG_MAIN_FIND_KEYS_BY_PREFIX_CALLBACK);
-                m.obj = findKeysByPrefixBundle;
+                callOnMainHandler(Constant.MSG_MAIN_FIND_KEYS_BY_PREFIX_CALLBACK, key);
                 break;
             default:
                 return;
         }
-        getMainHandler().sendMessage(m);
     }
 
     private MainHandler getMainHandler() {

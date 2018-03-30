@@ -16,22 +16,11 @@
 
 package io.panther.bundle;
 
-import io.panther.callback.ReadCallback;
 
 /**
  * Created by LiShen on 2017/1/11.
- * Read data bundle
+ * Base bundle
  */
 
-public final class ReadBundle extends BaseBundle{
-    public String key;
-    public Object data;
-    public Class dataClass;
-    public ReadCallback callback;
-
-    public ReadBundle(String key, Class dataClass, ReadCallback callback) {
-        this.key = key;
-        this.dataClass = dataClass;
-        this.callback = callback;
-    }
+public class BaseBundle {
 }

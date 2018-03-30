@@ -16,7 +16,6 @@
 
 package io.panther.memorycache;
 
-
 import android.text.TextUtils;
 
 import java.util.ArrayList;
@@ -32,13 +31,13 @@ import io.panther.bundle.VisitTimeBundle;
  * Lru cache map
  */
 
-public class MemoryCacheMap {
+public class PantherMemoryCacheMap {
     private int maxSize;
-    private static volatile ArrayMap<String, Object> cacheMap = new ArrayMap<>();
+    private static volatile PantherArrayMap<String, Object> cacheMap = new PantherArrayMap<>();
     private static volatile List<VisitTimeBundle> visitTimeList = new ArrayList<>();
     private Comparator<VisitTimeBundle> visitTimeComparator;
 
-    public MemoryCacheMap(int maxSize) {
+    public PantherMemoryCacheMap(int maxSize) {
         if (maxSize <= 0) {
             throw new IllegalArgumentException("maxSize <= 0");
         }

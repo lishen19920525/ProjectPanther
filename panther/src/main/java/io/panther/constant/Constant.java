@@ -41,7 +41,12 @@ public class Constant {
 
     public static final String JSON_OBJECT_PREFIX = "{";
     public static final String JSON_ARRAY_PREFIX = "[";
-    public static final String EMPTY_DATA_BUNDLE_JSON = "{\"key\":null,\"data\":null,\"dataJson\":\"\",\"updateTime\":0}";
 
     public static final String PANTHER_MODULE_NAME = "io.panther.PantherModule";
+
+    public static final String SAVE_KEY_PREFIX = "save:";
+    public static final String READ_KEY_PREFIX = "read:";
+    public static final String DELETE_KEY_PREFIX = "delete:";
+    public static final String MASS_DELETE_KEY_PREFIX = "mass_delete:";
+    public static final String FIND_KEYS_BY_PREFIX_KEY_PREFIX = "find_keys_by_prefix:";
 }

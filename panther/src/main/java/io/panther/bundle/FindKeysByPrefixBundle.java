@@ -7,7 +7,7 @@ import io.panther.callback.FindKeysCallback;
  * Created by LiShen on 2017/11/30.
  */
 
-public class FindKeysByPrefixBundle {
+public class FindKeysByPrefixBundle extends BaseBundle {
     public String prefix;
     public String[] keys;
     public FindKeysCallback callback;

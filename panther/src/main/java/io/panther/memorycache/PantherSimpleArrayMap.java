@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.panther.memorycache;
 
 import android.util.Log;
@@ -21,14 +22,14 @@ import java.util.ConcurrentModificationException;
 import java.util.Map;
 
 /**
- * Base implementation of {@link ArrayMap} that doesn't include any standard Java
+ * Base implementation of {@link PantherArrayMap} that doesn't include any standard Java
  * container API interoperability.  These features are generally heavier-weight ways
  * to interact with the container, so discouraged, but they can be useful to make it
  * easier to use as a drop-in replacement for HashMap.  If you don't need them, this
  * class can be preferrable since it doesn't bring in any of the implementation of those
  * APIs, allowing that code to be stripped by ProGuard.
  */
-public class SimpleArrayMap<K, V> {
+public class PantherSimpleArrayMap<K, V> {
     public static final int[] EMPTY_INTS = new int[0];
     public static final long[] EMPTY_LONGS = new long[0];
     public static final Object[] EMPTY_OBJECTS = new Object[0];
@@ -184,7 +185,7 @@ public class SimpleArrayMap<K, V> {
     @SuppressWarnings("ArrayToString")
     private void allocArrays(final int size) {
         if (size == (BASE_SIZE * 2)) {
-            synchronized (ArrayMap.class) {
+            synchronized (PantherArrayMap.class) {
                 if (mTwiceBaseCache != null) {
                     final Object[] array = mTwiceBaseCache;
                     mArray = array;
@@ -198,7 +199,7 @@ public class SimpleArrayMap<K, V> {
                 }
             }
         } else if (size == BASE_SIZE) {
-            synchronized (ArrayMap.class) {
+            synchronized (PantherArrayMap.class) {
                 if (mBaseCache != null) {
                     final Object[] array = mBaseCache;
                     mArray = array;
@@ -220,7 +221,7 @@ public class SimpleArrayMap<K, V> {
     @SuppressWarnings("ArrayToString")
     private static void freeArrays(final int[] hashes, final Object[] array, final int size) {
         if (hashes.length == (BASE_SIZE * 2)) {
-            synchronized (ArrayMap.class) {
+            synchronized (PantherArrayMap.class) {
                 if (mTwiceBaseCacheSize < CACHE_SIZE) {
                     array[0] = mTwiceBaseCache;
                     array[1] = hashes;
@@ -234,7 +235,7 @@ public class SimpleArrayMap<K, V> {
                 }
             }
         } else if (hashes.length == BASE_SIZE) {
-            synchronized (ArrayMap.class) {
+            synchronized (PantherArrayMap.class) {
                 if (mBaseCacheSize < CACHE_SIZE) {
                     array[0] = mBaseCache;
                     array[1] = hashes;
@@ -254,7 +255,7 @@ public class SimpleArrayMap<K, V> {
      * Create a new empty ArrayMap.  The default capacity of an array map is 0, and
      * will grow once items are added to it.
      */
-    public SimpleArrayMap() {
+    public PantherSimpleArrayMap() {
         mHashes = EMPTY_INTS;
         mArray = EMPTY_OBJECTS;
         mSize = 0;
@@ -263,7 +264,7 @@ public class SimpleArrayMap<K, V> {
     /**
      * Create a new ArrayMap with a given initial capacity.
      */
-    public SimpleArrayMap(int capacity) {
+    public PantherSimpleArrayMap(int capacity) {
         if (capacity == 0) {
             mHashes = EMPTY_INTS;
             mArray = EMPTY_OBJECTS;
@@ -276,7 +277,7 @@ public class SimpleArrayMap<K, V> {
     /**
      * Create a new ArrayMap with the mappings from the given ArrayMap.
      */
-    public SimpleArrayMap(SimpleArrayMap<K, V> map) {
+    public PantherSimpleArrayMap(PantherSimpleArrayMap<K, V> map) {
         this();
         if (map != null) {
             putAll(map);
@@ -501,7 +502,7 @@ public class SimpleArrayMap<K, V> {
      *
      * @param array The array whose contents are to be retrieved.
      */
-    public void putAll(SimpleArrayMap<? extends K, ? extends V> array) {
+    public void putAll(PantherSimpleArrayMap<? extends K, ? extends V> array) {
         final int N = array.mSize;
         ensureCapacity(mSize + N);
         if (mSize == 0) {
@@ -619,8 +620,8 @@ public class SimpleArrayMap<K, V> {
         if (this == object) {
             return true;
         }
-        if (object instanceof SimpleArrayMap) {
-            SimpleArrayMap<?, ?> map = (SimpleArrayMap<?, ?>) object;
+        if (object instanceof PantherSimpleArrayMap) {
+            PantherSimpleArrayMap<?, ?> map = (PantherSimpleArrayMap<?, ?>) object;
             if (size() != map.size()) {
                 return false;
             }

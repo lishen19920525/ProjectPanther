@@ -33,7 +33,7 @@ import java.util.Set;
  * a hash map).
  * <p>
  * <p>If you don't need the standard Java container APIs provided here (iterators etc),
- * consider using {@link SimpleArrayMap} instead.</p>
+ * consider using {@link PantherSimpleArrayMap} instead.</p>
  * <p>
  * <p>Note that this implementation is not intended to be appropriate for data structures
  * that may contain large numbers of items.  It is generally slower than a traditional
@@ -47,24 +47,24 @@ import java.util.Set;
  * item, it may reduce the capacity to better match the current size.  In the future an
  * explicit call to set the capacity should turn off this aggressive shrinking behavior.</p>
  */
-public class ArrayMap<K, V> extends SimpleArrayMap<K, V> implements Map<K, V> {
+public class PantherArrayMap<K, V> extends PantherSimpleArrayMap<K, V> implements Map<K, V> {
     MapCollections<K, V> mCollections;
 
-    public ArrayMap() {
+    public PantherArrayMap() {
         super();
     }
 
     /**
      * Create a new ArrayMap with a given initial capacity.
      */
-    public ArrayMap(int capacity) {
+    public PantherArrayMap(int capacity) {
         super(capacity);
     }
 
     /**
      * Create a new ArrayMap with the mappings from the given ArrayMap.
      */
-    public ArrayMap(SimpleArrayMap map) {
+    public PantherArrayMap(PantherSimpleArrayMap map) {
         super(map);
     }
 
@@ -93,7 +93,7 @@ public class ArrayMap<K, V> extends SimpleArrayMap<K, V> implements Map<K, V> {
 
                 @Override
                 protected Map<K, V> colGetMap() {
-                    return ArrayMap.this;
+                    return PantherArrayMap.this;
                 }
 
                 @Override

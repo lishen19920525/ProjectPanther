@@ -23,7 +23,7 @@ import io.panther.callback.SaveCallback;
  * Save data bundle
  */
 
-public final class SaveBundle {
+public final class SaveBundle extends BaseBundle {
     public String key;
     public boolean success;
     public Object data;

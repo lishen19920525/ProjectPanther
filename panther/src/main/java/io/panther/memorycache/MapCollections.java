@@ -1,4 +1,4 @@
-package io.panther.memorycache;/*
+/*
  * Copyright (C) 2013 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +14,8 @@ package io.panther.memorycache;/*
  * limitations under the License.
  */
 
+package io.panther.memorycache;
+
 import java.lang.reflect.Array;
 import java.util.Collection;
 import java.util.Iterator;
@@ -23,7 +25,7 @@ import java.util.Set;
 
 /**
  * Helper for writing standard Java collection interfaces to a data
- * structure like {@link ArrayMap}.
+ * structure like {@link PantherArrayMap}.
  */
 abstract class MapCollections<K, V> {
     EntrySet mEntrySet;

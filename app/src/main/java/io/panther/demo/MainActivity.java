@@ -11,6 +11,7 @@ import java.util.Date;
 import java.util.List;
 
 import io.panther.Panther;
+import io.panther.callback.FindKeysCallback;
 import io.panther.callback.MassDeleteCallback;
 import io.panther.callback.ReadCallback;
 import io.panther.callback.SaveCallback;
@@ -111,15 +112,32 @@ public class MainActivity extends Activity {
             Panther.get(getActivity()).deleteFromDatabase("test_1");
             Log.i("test exist", Panther.get(getActivity()).keyExist("test_1") + "");
 
-            String[] keys = Panther.get(getActivity()).findKeysByPrefix("test");
-            Panther.get(getActivity()).massDeleteFromDatabaseAsync(keys, new MassDeleteCallback() {
+            Panther.get(getActivity()).findKeysByPrefix("test", new FindKeysCallback() {
                 @Override
-                public void onResult(boolean b) {
-                    Log.i("test exist", Panther.get(getActivity()).keyExist("test_1") + "");
+                public void onResult(String[] keys) {
+                    Panther.get(getActivity()).massDeleteFromDatabaseAsync(keys, new MassDeleteCallback() {
+                        @Override
+                        public void onResult(boolean b) {
+                            Log.i("test exist", Panther.get(getActivity()).keyExist("test_1") + "");
+                        }
+                    });
                 }
             });
-        } else if (v.getId() == R.id.btnMainMemoryCache) {
 
+        } else if (v.getId() == R.id.btnMainMemoryCache) {
+            // not weak ref
+            Panther.get(this).writeInMemory("studentJack", studentJack, true);
+            // weak ref
+            Panther.get(this).writeInMemory("studentJames", studentJames);
+
+            StudentBean jack = (StudentBean) Panther.get(this).readFromMemory("studentJack", true);
+            if (jack != null)
+                Log.i("jack", jack.toString());
+            StudentBean james = (StudentBean) Panther.get(this).readFromMemory("studentJames");
+            if (james != null)
+                Log.i("james", james.toString());
+
+            Panther.get(this).deleteFromMemory("studentJames");
         }
     }
 

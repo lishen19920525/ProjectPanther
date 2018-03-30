@@ -23,7 +23,7 @@ import io.panther.callback.MassDeleteCallback;
  * Mass delete data bundle
  */
 
-public final class MassDeleteBundle {
+public final class MassDeleteBundle extends BaseBundle{
     public String[] keys;
     public boolean success;
     public MassDeleteCallback callback;

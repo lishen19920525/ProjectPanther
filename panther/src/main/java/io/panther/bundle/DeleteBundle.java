@@ -24,7 +24,7 @@ import io.panther.callback.DeleteCallback;
  * Delete data bundle
  */
 
-public final class DeleteBundle {
+public final class DeleteBundle extends BaseBundle {
     public String key;
     public boolean success;
     public DeleteCallback callback;
