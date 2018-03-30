@@ -1,4 +1,4 @@
-package io.panther;
+package io.panther.util;
 
 import android.text.TextUtils;
 

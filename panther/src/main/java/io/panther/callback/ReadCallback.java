@@ -16,7 +16,6 @@
 
 package io.panther.callback;
 
-import io.panther.bundle.DataBundle;
 
 /**
  * Created by LiShen on 2017/11/22.
@@ -24,5 +23,5 @@ import io.panther.bundle.DataBundle;
  */
 
 public interface ReadCallback {
-    void onResult(DataBundle result);
+    void onResult(boolean success, Object result);
 }

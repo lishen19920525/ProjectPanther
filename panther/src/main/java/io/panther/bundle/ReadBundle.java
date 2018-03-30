@@ -25,7 +25,7 @@ import io.panther.callback.ReadCallback;
 
 public final class ReadBundle {
     public String key;
-    public DataBundle data;
+    public Object data;
     public Class dataClass;
     public ReadCallback callback;
 

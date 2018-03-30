@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.panther;
+package io.panther.memorycache;
 
 
 import android.text.TextUtils;
@@ -22,7 +22,6 @@ import android.text.TextUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 
@@ -35,7 +34,7 @@ import io.panther.bundle.VisitTimeBundle;
 
 public class MemoryCacheMap {
     private int maxSize;
-    private static volatile HashMap<String, Object> cacheMap = new HashMap<>();
+    private static volatile ArrayMap<String, Object> cacheMap = new ArrayMap<>();
     private static volatile List<VisitTimeBundle> visitTimeList = new ArrayList<>();
     private Comparator<VisitTimeBundle> visitTimeComparator;
 

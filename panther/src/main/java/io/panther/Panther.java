@@ -25,16 +25,15 @@ import android.os.Process;
 import android.text.TextUtils;
 import android.util.Log;
 
-import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.serializer.ValueFilter;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.snappydb.DB;
 import com.snappydb.DBFactory;
 
 import java.lang.ref.WeakReference;
-import java.math.BigDecimal;
+import java.lang.reflect.Type;
+import java.util.List;
 
-import io.panther.bundle.DataBundle;
-import io.panther.bundle.DataJsonBundle;
 import io.panther.bundle.DeleteBundle;
 import io.panther.bundle.FindKeysByPrefixBundle;
 import io.panther.bundle.MassDeleteBundle;
@@ -45,34 +44,31 @@ import io.panther.callback.FindKeysCallback;
 import io.panther.callback.MassDeleteCallback;
 import io.panther.callback.ReadCallback;
 import io.panther.callback.SaveCallback;
+import io.panther.constant.Constant;
+import io.panther.memorycache.MemoryCacheMap;
+import io.panther.util.ConfigurationParser;
+import io.panther.util.GZIP;
 
 /**
  * Created by LiShen on 2016/7/8.
  * Panther
  */
+@SuppressWarnings("unchecked")
 public final class Panther {
     private static volatile Panther panther;
-
     private PantherConfiguration configuration;
     private MemoryCacheMap memoryCacheMap;
     private static volatile DB database;
     private MainHandler mainHandler;
     private HandlerThread workThread;
     private WorkHandler workHandler;
-    private ValueFilter jsonParseValueFilter;
+    private Gson GSON;
 
-    private Panther(PantherConfiguration pantherConfiguration) {
-        jsonParseValueFilter = new ValueFilter() {
-            @Override
-            public Object process(Object object, String name, Object value) {
-                if (value instanceof BigDecimal || value instanceof Double || value instanceof Float) {
-                    return new BigDecimal(value.toString()).toPlainString();
-                }
-                return value;
-            }
-        };
-
-        configuration = pantherConfiguration;
+    private Panther(PantherConfiguration configuration) {
+        // Gson
+        GSON = new Gson();
+        // configuration
+        this.configuration = configuration;
         log("========== Panther configuration =========="
                 + "\ndatabase folder: " + configuration.databaseFolder.getAbsolutePath()
                 + "\ndatabase name: " + configuration.databaseName
@@ -80,7 +76,7 @@ public final class Panther {
                 + "\n===========================================");
         // memory cache
         memoryCacheMap = new MemoryCacheMap(configuration.memoryCacheSize);
-        // database
+        // open database when PANTHER init
         openDatabase();
     }
 
@@ -111,7 +107,8 @@ public final class Panther {
                 synchronized (database) {
                     database.close();
                 }
-            } catch (Exception ignore) {
+            } catch (Exception e) {
+                logError("close database failed", e);
             }
         }
     }
@@ -130,8 +127,7 @@ public final class Panther {
             }
             log("database: " + configuration.databaseName + " open success");
         } catch (Exception e) {
-            e.printStackTrace();
-            logError("database: " + configuration.databaseName + " open failed");
+            logError("database: " + configuration.databaseName + " open failed", e);
         }
     }
 
@@ -140,7 +136,7 @@ public final class Panther {
      *
      * @return available
      */
-    public boolean checkDatabaseAvailable() {
+    private boolean checkDatabaseAvailable() {
         boolean available = false;
         try {
             if (database != null && database.isOpen()) {
@@ -159,12 +155,10 @@ public final class Panther {
      */
     private void databaseOperationPreCheck(String key) throws Exception {
         if (TextUtils.isEmpty(key)) {
-            logError("KEY can not be null !");
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException("KEY or PREFIX can not be null !");
         }
         if (!checkDatabaseAvailable()) {
-            logError("database is unavailable");
-            throw new IllegalStateException();
+            throw new IllegalStateException("DATABASE is unavailable");
         }
     }
 
@@ -180,26 +174,17 @@ public final class Panther {
     public boolean writeInDatabase(String key, Object data) {
         try {
             databaseOperationPreCheck(key);
-            DataBundle dataBundle = new DataBundle();
-            dataBundle.setKey(key);
-            dataBundle.setData(data);
-            dataBundle.setUpdateTime(System.currentTimeMillis());
-            long milestone = System.currentTimeMillis();
-            String dataBundleJson = JSON.toJSONString(dataBundle, jsonParseValueFilter);
-            log("write to JSON cost time: " + (System.currentTimeMillis() - milestone));
-            milestone = System.currentTimeMillis();
-            String dataBundleJsonCompressed = GZIP.compress(dataBundleJson);
-            log("write compress cost time: " + (System.currentTimeMillis() - milestone));
-            milestone = System.currentTimeMillis();
+            // to Json string
+            String dataJson = GSON.toJson(data);
+            // compress
+            String dataBundleJsonCompressed = GZIP.compress(dataJson);
             synchronized (database) {
                 database.put(key, dataBundleJsonCompressed);
-                log("write put cost time: " + (System.currentTimeMillis() - milestone));
             }
-            log("key = " + key + "\nvalue = " + dataBundleJson + "\n saved in database finished");
+            log("key = " + key + " value = " + dataJson + " saved in database finished");
             return true;
         } catch (Exception e) {
-            e.printStackTrace();
-            logError("key = " + key + "\nvalue = " + String.valueOf(data) + "\nsave in database failed");
+            logError("key = " + key + " value = " + String.valueOf(data) + " save in database failed", e);
             return false;
         }
     }
@@ -227,96 +212,49 @@ public final class Panther {
      * @param dataClass class of data
      * @return data
      */
-    public DataBundle readFromDatabase(String key, Class dataClass) {
-        DataBundle dataBundle = new DataBundle();
-        dataBundle.setKey(key);
-        // data bundle json
-        String dataBundleJson;
-        long milestone = System.currentTimeMillis();
+    public <T> Object readFromDatabase(String key, Class<T> dataClass) {
+        String dataJson = null;
+        T data = null;
         try {
             databaseOperationPreCheck(key);
-            milestone = System.currentTimeMillis();
+            // read data json string compressed
             synchronized (database) {
-                dataBundleJson = database.get(key);
-                log("read get cost time: " + (System.currentTimeMillis() - milestone));
-                milestone = System.currentTimeMillis();
+                dataJson = database.get(key);
             }
         } catch (Exception e) {
-            logError("read { key = " + key + " } from database failed");
-            e.printStackTrace();
-            return dataBundle;
+            logError("read { key = " + key + " } from database failed", e);
         }
-        dataBundleJson = GZIP.decompress(dataBundleJson);
-        log("read decompress cost time: " + (System.currentTimeMillis() - milestone));
-        if (!TextUtils.isEmpty(dataBundleJson)) {
-            log("key = " + key + "\ndata bundle: " + dataBundleJson + "\nread from database success");
-        }
-
-        DataJsonBundle dataJsonBundle = new DataJsonBundle();
-        try {
-            dataJsonBundle = JSON.parseObject(dataBundleJson, DataJsonBundle.class);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        // data parse
-//        JSONObject dataBundleJsonObject = null;
-//        try {
-//            milestone = System.currentTimeMillis();
-//            dataBundleJsonObject = new JSONObject(dataBundleJson);
-//            log("read decompress new JSONObject  time: " + (System.currentTimeMillis() - milestone));
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//        }
-//        milestone = System.currentTimeMillis();
-        if (!TextUtils.isEmpty(dataJsonBundle.getData())) {
-            // update time
-            try {
-                dataBundle.setUpdateTime(dataJsonBundle.getUpdateTime());
-            } catch (Exception ignore) {
-            }
-            // data json
-//            String dataJson = null;
-//            try {
-//                dataJson = dataBundleJsonObject.getString(Constant.JSON_KEY_DATA);
-//            } catch (Exception ignore) {
-//            }
-//            if (TextUtils.isEmpty(dataJson)) {
-//                dataJson = "";
-//            }
-            dataBundle.setDataJson(dataJsonBundle.getData());
+        if (!TextUtils.isEmpty(dataJson)) {
+            // decompress
+            dataJson = GZIP.decompress(dataJson);
             // data parse
             if (dataClass == String.class) {
                 // String.class
-                dataBundle.setData(dataBundle.getDataJson());
+                data = (T) dataJson;
             } else {
-                if (dataBundle.getDataJson().startsWith(Constant.JSON_ARRAY_PREFIX)) {
+                if (dataJson.startsWith(Constant.JSON_ARRAY_PREFIX)) {
                     // parse to array
                     try {
-                        dataBundle.setData(JSON.parseArray(dataBundle.getDataJson(), dataClass));
+                        Type type = new TypeToken<List<T>>() {
+                        }.getType();
+                        data = (T) GSON.<List<T>>fromJson(dataJson, type);
                     } catch (Exception e) {
-                        e.printStackTrace();
-                        logError("read { key = " + key + " } from database parse failed");
-                        return dataBundle;
+                        logError("read { key = " + key + " } from database parse failed", e);
                     }
                 } else {
                     // parse to object
                     try {
-                        dataBundle.setData(JSON.parseObject(dataBundle.getDataJson(), dataClass));
+                        data = GSON.fromJson(dataJson, dataClass);
                     } catch (Exception e) {
-                        e.printStackTrace();
-                        logError("read { key = " + key + " } from database parse failed");
-                        return dataBundle;
+                        logError("read { key = " + key + " } from database parse failed", e);
                     }
                 }
             }
-        } else {
-            logError("read { key = " + key + " } from database failed");
-            return dataBundle;
         }
-        log(dataBundle + "\n read from database finished");
-        log("read parse cost time: " + (System.currentTimeMillis() - milestone));
-        return dataBundle;
+        if (!TextUtils.isEmpty(dataJson) && data != null) {
+            log("key = " + key + " value = " + dataJson + " read from database finished");
+        }
+        return data;
     }
 
     /**
@@ -333,28 +271,30 @@ public final class Panther {
     }
 
     /**
-     * Read data from database directly and synchronously
-     * Not recommended to call for read large data in the main thread.
-     * Read large data use {@link #readFromDatabaseAsync(String, Class, ReadCallback)}
-     *
-     * @param key       key
-     * @param dataClass class of data
-     * @return data
-     */
-    public Object readObjectFromDatabase(String key, Class dataClass) {
-        return readFromDatabase(key, dataClass).getData();
-    }
-
-    /**
      * Read String from database synchronously
      *
      * @param key key
      * @return data
      */
     public String readStringFromDatabase(String key) {
-        String data = (String) readObjectFromDatabase(key, String.class);
+        String data = (String) readFromDatabase(key, String.class);
         if (data == null) {
             data = "";
+        }
+        return data;
+    }
+
+    /**
+     * Read String from database synchronously
+     *
+     * @param key          key
+     * @param defaultValue default value
+     * @return data
+     */
+    public String readStringFromDatabase(String key, String defaultValue) {
+        String data = (String) readFromDatabase(key, String.class);
+        if (TextUtils.isEmpty(data)) {
+            data = defaultValue;
         }
         return data;
     }
@@ -367,7 +307,7 @@ public final class Panther {
      * @return data
      */
     public int readIntFromDatabase(String key, int defaultValue) {
-        Integer data = (Integer) readObjectFromDatabase(key, Integer.class);
+        Integer data = (Integer) readFromDatabase(key, Integer.class);
         if (data == null) {
             return defaultValue;
         } else {
@@ -383,7 +323,7 @@ public final class Panther {
      * @return data
      */
     public long readLongFromDatabase(String key, long defaultValue) {
-        Long data = (Long) readObjectFromDatabase(key, Long.class);
+        Long data = (Long) readFromDatabase(key, Long.class);
         if (data == null) {
             return defaultValue;
         } else {
@@ -399,7 +339,7 @@ public final class Panther {
      * @return data
      */
     public double readDoubleFromDatabase(String key, double defaultValue) {
-        Double data = (Double) readObjectFromDatabase(key, Double.class);
+        Double data = (Double) readFromDatabase(key, Double.class);
         if (data == null) {
             return defaultValue;
         } else {
@@ -415,7 +355,7 @@ public final class Panther {
      * @return data
      */
     public boolean readBooleanFromDatabase(String key, boolean defaultValue) {
-        Boolean data = (Boolean) readObjectFromDatabase(key, Boolean.class);
+        Boolean data = (Boolean) readFromDatabase(key, Boolean.class);
         if (data == null) {
             return defaultValue;
         } else {
@@ -434,10 +374,10 @@ public final class Panther {
             synchronized (database) {
                 database.del(key);
             }
-            log("{ key = " + key + " }\n delete from database finished");
+            log("{ key = " + key + " } delete from database finished");
             return true;
         } catch (Exception e) {
-            logError(" { key = " + key + " }\n delete from database failed");
+            logError(" { key = " + key + " } delete from database failed", e);
             return false;
         }
     }
@@ -495,10 +435,9 @@ public final class Panther {
     public String[] findKeysByPrefix(String prefix) {
         String[] keys = null;
         try {
-            if (checkDatabaseAvailable() && !TextUtils.isEmpty(prefix)) {
-                synchronized (database) {
-                    keys = database.findKeys(prefix);
-                }
+            databaseOperationPreCheck(prefix);
+            synchronized (database) {
+                keys = database.findKeys(prefix);
             }
         } catch (Exception ignore) {
         }
@@ -535,7 +474,7 @@ public final class Panther {
         } else {
             memoryCacheMap.put(key, new WeakReference<>(data));
         }
-        log("{ key = " + key + " data = " + data + " }\nsave in memory finished");
+        log("{ key = " + key + " data = " + data + " } save in memory finished");
         log("memory cache size: " + memoryCacheMap.size());
     }
 
@@ -566,7 +505,7 @@ public final class Panther {
                 data = dataReference.get();
             }
         }
-        log("{ key = " + key + " data = " + data + " }\nread from memory finished");
+        log("{ key = " + key + " data = " + data + " } read from memory finished");
         return data;
     }
 
@@ -587,7 +526,7 @@ public final class Panther {
      */
     public void deleteFromMemory(String key) {
         memoryCacheMap.delete(key);
-        log("{ key = " + key + " }\ndelete from memory finished");
+        log("{ key = " + key + " } delete from memory finished");
         log("memory cache size: " + memoryCacheMap.size());
     }
 
@@ -624,7 +563,8 @@ public final class Panther {
             case Constant.MSG_MAIN_READ_CALLBACK:
                 ReadBundle readBundle = (ReadBundle) msg.obj;
                 if (readBundle != null && readBundle.callback != null) {
-                    readBundle.callback.onResult(readBundle.data);
+                    boolean success = readBundle.data != null;
+                    readBundle.callback.onResult(success, readBundle.data);
                 }
                 break;
             case Constant.MSG_MAIN_DELETE_CALLBACK:
@@ -720,12 +660,12 @@ public final class Panther {
 
     private void log(String content) {
         if (configuration.logEnabled)
-            Log.i("Panther", content);
+            Log.d("Panther", content);
     }
 
-    private void logError(String content) {
+    private void logError(String content, Throwable error) {
         if (configuration.logEnabled)
-            Log.e("Panther", content);
+            Log.e("Panther", content, error);
     }
 
     private static class MainHandler extends Handler {

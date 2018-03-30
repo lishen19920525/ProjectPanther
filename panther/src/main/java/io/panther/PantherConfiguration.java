@@ -21,6 +21,8 @@ import android.text.TextUtils;
 
 import java.io.File;
 
+import io.panther.constant.Constant;
+
 /**
  * Created by LiShen on 2017/11/21.
  * Panther init configuration

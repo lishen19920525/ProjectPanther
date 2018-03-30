@@ -20,9 +20,11 @@
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
 -keepattributes Exceptions,InnerClasses,...
+-keepparameternames
 -keep class com.snappydb.**{*;}
 -keep class io.panther.bundle.**{*;}
 -keep class io.panther.callback.**{*;}
+-keep interface io.panther.callback.** {*;}
 -keep class io.panther.PantherModule{*;}
 -keep class io.panther.PantherConfiguration{*;}
 -keep class io.panther.PantherConfiguration$Builder{*;}

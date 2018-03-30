@@ -1,17 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context="io.panther.demo.MainActivity">
 
-    <Button
-        android:id="@+id/btnMain"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_centerInParent="true"
-        android:onClick="onClick"
-        android:text="Hello World!" />
+        android:orientation="vertical">
 
+        <Button
+            android:id="@+id/btnMainDatabase"
+            android:layout_width="192dp"
+            android:layout_height="72dp"
+            android:onClick="onClick"
+            android:text="DATABASE" />
+
+        <Button
+            android:id="@+id/btnMainMemoryCache"
+            android:layout_width="192dp"
+            android:layout_height="72dp"
+            android:layout_marginTop="16dp"
+            android:onClick="onClick"
+            android:text="MEMORY CACHE" />
+    </LinearLayout>
 </RelativeLayout>

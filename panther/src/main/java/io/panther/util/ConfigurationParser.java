@@ -1,8 +1,12 @@
-package io.panther;
+package io.panther.util;
 
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+
+import io.panther.PantherConfiguration;
+import io.panther.PantherModule;
+import io.panther.constant.Constant;
 
 /**
  * Created by LiShen on 2017/11/29.
