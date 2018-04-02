@@ -101,6 +101,9 @@ public class MainActivity extends Activity {
                             if (success) {
                                 List<StudentBean> students = (List<StudentBean>) result;
                                 Log.i("students", students.size() + " student");
+                                for (StudentBean stu : students) {
+                                    Log.i("sss", stu.toString());
+                                }
                             }
                         }
                     });

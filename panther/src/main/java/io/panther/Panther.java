@@ -25,14 +25,10 @@ import android.os.Process;
 import android.text.TextUtils;
 import android.util.Log;
 
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 import com.snappydb.DB;
 import com.snappydb.DBFactory;
 
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Type;
-import java.util.List;
 
 import io.panther.bundle.BaseBundle;
 import io.panther.bundle.DeleteBundle;
@@ -50,6 +46,7 @@ import io.panther.memorycache.PantherArrayMap;
 import io.panther.memorycache.PantherMemoryCacheMap;
 import io.panther.util.ConfigurationParser;
 import io.panther.util.GZIP;
+import io.panther.util.JSON;
 
 /**
  * Created by LiShen on 2016/7/8.
@@ -70,11 +67,7 @@ public final class Panther {
     private HandlerThread workThread;
     private WorkHandler workHandler;
 
-    private Gson GSON;
-
     private Panther(PantherConfiguration configuration) {
-        // Gson
-        GSON = new Gson();
         // configuration
         this.configuration = configuration;
         log("========== Panther configuration =========="
@@ -188,7 +181,7 @@ public final class Panther {
         try {
             databaseOperationPreCheck(key);
             // to Json string
-            String dataJson = GSON.toJson(data);
+            String dataJson = JSON.toJSONString(data);
             // compress
             String dataBundleJsonCompressed = GZIP.compress(dataJson);
             synchronized (database) {
@@ -248,16 +241,14 @@ public final class Panther {
                 if (dataJson.startsWith(Constant.JSON_ARRAY_PREFIX)) {
                     // parse to array
                     try {
-                        Type type = new TypeToken<List<T>>() {
-                        }.getType();
-                        data = (T) GSON.<List<T>>fromJson(dataJson, type);
+                        data = (T) JSON.parseArray(dataJson, dataClass);
                     } catch (Exception e) {
                         logError("read { key = " + key + " } from database parse failed", e);
                     }
                 } else {
                     // parse to object
                     try {
-                        data = GSON.fromJson(dataJson, dataClass);
+                        data = JSON.parseObject(dataJson, dataClass);
                     } catch (Exception e) {
                         logError("read { key = " + key + " } from database parse failed", e);
                     }

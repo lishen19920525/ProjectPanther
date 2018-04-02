@@ -84,15 +84,20 @@ public class StudentBean {
 
     @Override
     public String toString() {
-        return "StudentBean{" +
-                "id=" + id +
-                ", name='" + name + '\'' +
-                ", birthday=" + birthday.toLocaleString() +
-                ", cardBalance=" + cardBalance.toPlainString() +
-                ", gender=" + gender.toString() +
-                ", valid=" + valid +
-                ", grade=" + grade +
-                ", credit=" + credit +
-                '}';
+        try {
+            return "StudentBean{" +
+                    "id=" + id +
+                    ", name='" + name + '\'' +
+                    ", birthday=" + birthday.toLocaleString() +
+                    ", cardBalance=" + cardBalance.toPlainString() +
+                    ", gender=" + gender.toString() +
+                    ", valid=" + valid +
+                    ", grade=" + grade +
+                    ", credit=" + credit +
+                    '}';
+        } catch (Exception e) {
+            e.printStackTrace();
+            return super.toString();
+        }
     }
 }
