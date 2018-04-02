@@ -3,7 +3,7 @@ A concise and quick Android KV database ( based on [SnappyDB](https://github.com
 
 # How to use
 ### 1. Download aar
-Latest release version: [v0.0.2](https://github.com/lishen19920525/ProjectPanther/releases)
+Latest release version: [panther.aar](https://github.com/lishen19920525/ProjectPanther/releases)
 </br>
 Put aar file into your project
 </br>
