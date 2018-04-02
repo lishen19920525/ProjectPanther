@@ -6,16 +6,6 @@ package io.panther.demo.bean;
  */
 
 public enum Gender {
-    FEMALE {
-        @Override
-        public String toString() {
-            return "female";
-        }
-    },
-    MALE{
-        @Override
-        public String toString() {
-            return "male";
-        }
-    }
+    FEMALE,
+    MALE
 }

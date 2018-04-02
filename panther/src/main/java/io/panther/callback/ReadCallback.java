@@ -22,6 +22,6 @@ package io.panther.callback;
  * Read callback
  */
 
-public interface ReadCallback {
-    void onResult(boolean success, Object result);
+public interface ReadCallback<T> {
+    void onResult(boolean success, T result);
 }

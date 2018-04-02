@@ -34,11 +34,13 @@ import io.panther.bundle.BaseBundle;
 import io.panther.bundle.DeleteBundle;
 import io.panther.bundle.FindKeysByPrefixBundle;
 import io.panther.bundle.MassDeleteBundle;
+import io.panther.bundle.ReadArrayBundle;
 import io.panther.bundle.ReadBundle;
 import io.panther.bundle.SaveBundle;
 import io.panther.callback.DeleteCallback;
 import io.panther.callback.FindKeysCallback;
 import io.panther.callback.MassDeleteCallback;
+import io.panther.callback.ReadArrayCallback;
 import io.panther.callback.ReadCallback;
 import io.panther.callback.SaveCallback;
 import io.panther.constant.Constant;
@@ -218,7 +220,7 @@ public final class Panther {
      * @param dataClass class of data
      * @return data
      */
-    public <T> Object readFromDatabase(String key, Class<T> dataClass) {
+    public <T> T readFromDatabase(String key, Class<T> dataClass) {
         String dataJson = null;
         T data = null;
         try {
@@ -238,20 +240,11 @@ public final class Panther {
                 // String.class
                 data = (T) dataJson;
             } else {
-                if (dataJson.startsWith(Constant.JSON_ARRAY_PREFIX)) {
-                    // parse to array
-                    try {
-                        data = (T) JSON.parseArray(dataJson, dataClass);
-                    } catch (Exception e) {
-                        logError("read { key = " + key + " } from database parse failed", e);
-                    }
-                } else {
-                    // parse to object
-                    try {
-                        data = JSON.parseObject(dataJson, dataClass);
-                    } catch (Exception e) {
-                        logError("read { key = " + key + " } from database parse failed", e);
-                    }
+                // parse to object
+                try {
+                    data = JSON.parseObject(dataJson, dataClass);
+                } catch (Exception e) {
+                    logError("read { key = " + key + " } from database parse failed", e);
                 }
             }
         }
@@ -268,11 +261,62 @@ public final class Panther {
      * @param dataClass class of data
      * @param callback  callback
      */
-    public void readFromDatabaseAsync(String key, Class dataClass, ReadCallback callback) {
-        ReadBundle readBundle = new ReadBundle(key, dataClass, callback);
+    public <T> void readFromDatabaseAsync(String key, Class<T> dataClass, ReadCallback<T> callback) {
+        ReadBundle<T> readBundle = new ReadBundle(key, dataClass, callback);
         dataMedium.put(Constant.READ_KEY_PREFIX + key, readBundle);
         callOnWorkHandler(Constant.MSG_WORK_READ, key);
     }
+
+    /**
+     * Read array data from database synchronously, core method.
+     * Not recommended to call for read large data in the main thread.
+     * Read large data use {@link #readArrayFromDatabaseAsync(String, Class, ReadArrayCallback)}
+     *
+     * @param key       key
+     * @param dataClass class of data
+     * @return array data
+     */
+    public <T> T[] readArrayFromDatabase(String key, Class<T> dataClass) {
+        String dataJson = null;
+        T[] data = null;
+        try {
+            databaseOperationPreCheck(key);
+            // read data json string compressed
+            synchronized (database) {
+                dataJson = database.get(key);
+            }
+        } catch (Exception e) {
+            logError("read { key = " + key + " } from database failed", e);
+        }
+        if (!TextUtils.isEmpty(dataJson)) {
+            // decompress
+            dataJson = GZIP.decompress(dataJson);
+            // data parse
+            try {
+                data = JSON.parseArray(dataJson, dataClass);
+            } catch (Exception e) {
+                logError("read { key = " + key + " } from database parse failed", e);
+            }
+        }
+        if (!TextUtils.isEmpty(dataJson) && data != null) {
+            log("key = " + key + " value = " + dataJson + " read from database finished");
+        }
+        return data;
+    }
+
+    /**
+     * Read array data from database asynchronously
+     *
+     * @param key       key
+     * @param dataClass class of data
+     * @param callback  callback
+     */
+    public <T> void readArrayFromDatabaseAsync(String key, Class<T> dataClass, ReadArrayCallback<T> callback) {
+        ReadArrayBundle<T> readBundle = new ReadArrayBundle(key, dataClass, callback);
+        dataMedium.put(Constant.READ_KEY_PREFIX + key, readBundle);
+        callOnWorkHandler(Constant.MSG_WORK_READ, key, Constant.MSG_SUBTYPE_READ_ARRAY);
+    }
+
 
     /**
      * Read String from database synchronously
@@ -281,7 +325,7 @@ public final class Panther {
      * @return data
      */
     public String readStringFromDatabase(String key) {
-        String data = (String) readFromDatabase(key, String.class);
+        String data = readFromDatabase(key, String.class);
         if (data == null) {
             data = "";
         }
@@ -296,7 +340,7 @@ public final class Panther {
      * @return data
      */
     public String readStringFromDatabase(String key, String defaultValue) {
-        String data = (String) readFromDatabase(key, String.class);
+        String data = readFromDatabase(key, String.class);
         if (TextUtils.isEmpty(data)) {
             data = defaultValue;
         }
@@ -311,7 +355,7 @@ public final class Panther {
      * @return data
      */
     public int readIntFromDatabase(String key, int defaultValue) {
-        Integer data = (Integer) readFromDatabase(key, Integer.class);
+        Integer data = readFromDatabase(key, Integer.class);
         if (data == null) {
             return defaultValue;
         } else {
@@ -327,7 +371,7 @@ public final class Panther {
      * @return data
      */
     public long readLongFromDatabase(String key, long defaultValue) {
-        Long data = (Long) readFromDatabase(key, Long.class);
+        Long data = readFromDatabase(key, Long.class);
         if (data == null) {
             return defaultValue;
         } else {
@@ -343,7 +387,7 @@ public final class Panther {
      * @return data
      */
     public double readDoubleFromDatabase(String key, double defaultValue) {
-        Double data = (Double) readFromDatabase(key, Double.class);
+        Double data = readFromDatabase(key, Double.class);
         if (data == null) {
             return defaultValue;
         } else {
@@ -359,7 +403,7 @@ public final class Panther {
      * @return data
      */
     public boolean readBooleanFromDatabase(String key, boolean defaultValue) {
-        Boolean data = (Boolean) readFromDatabase(key, Boolean.class);
+        Boolean data = readFromDatabase(key, Boolean.class);
         if (data == null) {
             return defaultValue;
         } else {
@@ -576,6 +620,7 @@ public final class Panther {
         log("memory cache clear finish");
     }
 
+
     /**
      * Send message to work handler
      *
@@ -583,8 +628,20 @@ public final class Panther {
      * @param key     key with event prefix
      */
     private void callOnWorkHandler(int message, String key) {
+        callOnWorkHandler(message, key, Constant.MSG_SUBTYPE_NORMAL);
+    }
+
+    /**
+     * Send message to work handler
+     *
+     * @param message message
+     * @param key     key with event prefix
+     * @param subtype subtype
+     */
+    private void callOnWorkHandler(int message, String key, int subtype) {
         Message msg = getWorkHandler().obtainMessage(message);
         msg.obj = key;
+        msg.arg1 = subtype;
         getWorkHandler().sendMessage(msg);
     }
 
@@ -604,11 +661,20 @@ public final class Panther {
                 }
                 break;
             case Constant.MSG_MAIN_READ_CALLBACK:
-                ReadBundle readBundle = (ReadBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
-                if (readBundle != null && readBundle.callback != null) {
-                    dataMedium.remove(Constant.READ_KEY_PREFIX + key);
-                    boolean success = readBundle.data != null;
-                    readBundle.callback.onResult(success, readBundle.data);
+                if (msg.arg1 == Constant.MSG_SUBTYPE_READ_ARRAY) {
+                    ReadArrayBundle readArrayBundle = (ReadArrayBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
+                    if (readArrayBundle != null && readArrayBundle.callback != null) {
+                        dataMedium.remove(Constant.READ_KEY_PREFIX + key);
+                        boolean success = readArrayBundle.data != null;
+                        readArrayBundle.callback.onResult(success, readArrayBundle.data);
+                    }
+                } else {
+                    ReadBundle readBundle = (ReadBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
+                    if (readBundle != null && readBundle.callback != null) {
+                        dataMedium.remove(Constant.READ_KEY_PREFIX + key);
+                        boolean success = readBundle.data != null;
+                        readBundle.callback.onResult(success, readBundle.data);
+                    }
                 }
                 break;
             case Constant.MSG_MAIN_DELETE_CALLBACK:
@@ -642,8 +708,20 @@ public final class Panther {
      * @param key     key with event prefix
      */
     private void callOnMainHandler(int message, String key) {
+        callOnMainHandler(message, key, Constant.MSG_SUBTYPE_NORMAL);
+    }
+
+    /**
+     * Send message to work handler
+     *
+     * @param message message
+     * @param key     key with event prefix
+     * @param subtype subtype
+     */
+    private void callOnMainHandler(int message, String key, int subtype) {
         Message msg = getMainHandler().obtainMessage(message);
         msg.obj = key;
+        msg.arg1 = subtype;
         getMainHandler().sendMessage(msg);
     }
 
@@ -661,9 +739,15 @@ public final class Panther {
                 callOnMainHandler(Constant.MSG_MAIN_SAVE_CALLBACK, key);
                 break;
             case Constant.MSG_WORK_READ:
-                ReadBundle readBundle = (ReadBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
-                readBundle.data = readFromDatabase(readBundle.key, readBundle.dataClass);
-                callOnMainHandler(Constant.MSG_MAIN_READ_CALLBACK, key);
+                if (msg.arg1 == Constant.MSG_SUBTYPE_READ_ARRAY) {
+                    ReadArrayBundle readArrayBundle = (ReadArrayBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
+                    readArrayBundle.data = readArrayFromDatabase(readArrayBundle.key, readArrayBundle.dataClass);
+                    callOnMainHandler(Constant.MSG_MAIN_READ_CALLBACK, key, msg.arg1);
+                } else {
+                    ReadBundle readBundle = (ReadBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
+                    readBundle.data = readFromDatabase(readBundle.key, readBundle.dataClass);
+                    callOnMainHandler(Constant.MSG_MAIN_READ_CALLBACK, key);
+                }
                 break;
             case Constant.MSG_WORK_DELETE:
                 DeleteBundle deleteBundle = (DeleteBundle) dataMedium.get(Constant.DELETE_KEY_PREFIX + key);

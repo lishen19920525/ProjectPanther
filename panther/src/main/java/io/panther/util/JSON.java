@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -33,15 +34,17 @@ public class JSON {
         }
     }
 
-    public static <T> List<T> parseArray(String json, Class<T> clazz) {
+    @SuppressWarnings("unchecked")
+    public static <T> T[] parseArray(String json, Class<T> clazz) {
         try {
-            List<JsonObject> jsonObjects = GSON.fromJson(json, new TypeToken<List<JsonObject>>() {
+            JsonObject[] jsonObjects = GSON.fromJson(json, new TypeToken<JsonObject[]>() {
             }.getType());
-            List<T> arrayList = new ArrayList<>();
+            List<T> list = new ArrayList<>();
             for (JsonObject jsonObject : jsonObjects) {
-                arrayList.add(GSON.fromJson(jsonObject, clazz));
+                list.add(GSON.fromJson(jsonObject, clazz));
             }
-            return arrayList;
+            T[] ts = (T[]) Array.newInstance(clazz, list.size());
+            return list.toArray(ts);
         } catch (Exception e) {
             e.printStackTrace();
             return null;

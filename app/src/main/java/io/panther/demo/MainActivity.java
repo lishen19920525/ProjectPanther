@@ -7,12 +7,14 @@ import android.view.View;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
 import io.panther.Panther;
 import io.panther.callback.FindKeysCallback;
 import io.panther.callback.MassDeleteCallback;
+import io.panther.callback.ReadArrayCallback;
 import io.panther.callback.ReadCallback;
 import io.panther.callback.SaveCallback;
 import io.panther.demo.bean.Gender;
@@ -78,6 +80,7 @@ public class MainActivity extends Activity {
     public void onClick(View v) {
         if (v.getId() == R.id.btnMainDatabase) {
             Panther.get(getActivity()).writeInDatabase("stu_jack", studentJack);
+            Panther.get(getActivity()).writeInDatabase("stu_james", studentJames);
             Panther.get(getActivity()).writeInDatabase("test_1", 1);
             Panther.get(getActivity()).writeInDatabase("test_2", 2.0f);
             Panther.get(getActivity()).writeInDatabase("test_3", "3");
@@ -89,17 +92,24 @@ public class MainActivity extends Activity {
             Panther.get(getActivity()).readStringFromDatabase("test_3", "");
             Panther.get(getActivity()).readBooleanFromDatabase("test_4", false);
 
-            StudentBean studentTemp = (StudentBean) Panther.get(getActivity()).readFromDatabase("stu_jack", StudentBean.class);
+            StudentBean studentTemp = Panther.get(getActivity()).readFromDatabase("stu_jack", StudentBean.class);
             Log.i("studentJack", studentTemp.toString());
+
+            Panther.get(getActivity()).readFromDatabaseAsync("stu_james", StudentBean.class, new ReadCallback<StudentBean>() {
+                @Override
+                public void onResult(boolean success, StudentBean result) {
+                    Log.i("studentJames", result.toString());
+                }
+            });
 
             Panther.get(getActivity()).writeInDatabaseAsync("students", students, new SaveCallback() {
                 @Override
                 public void onResult(boolean success) {
-                    Panther.get(getActivity()).readFromDatabaseAsync("students", StudentBean.class, new ReadCallback() {
+                    Panther.get(getActivity()).readArrayFromDatabaseAsync("students", StudentBean.class, new ReadArrayCallback<StudentBean>() {
                         @Override
-                        public void onResult(boolean success, Object result) {
+                        public void onResult(boolean success, StudentBean[] result) {
                             if (success) {
-                                List<StudentBean> students = (List<StudentBean>) result;
+                                List<StudentBean> students = Arrays.asList(result);
                                 Log.i("students", students.size() + " student");
                                 for (StudentBean stu : students) {
                                     Log.i("sss", stu.toString());

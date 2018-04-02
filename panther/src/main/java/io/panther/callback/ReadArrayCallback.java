@@ -14,24 +14,14 @@
  * limitations under the License.
  */
 
-package io.panther.bundle;
+package io.panther.callback;
 
-import io.panther.callback.ReadCallback;
 
 /**
- * Created by LiShen on 2017/1/11.
- * Read data bundle
+ * Created by LiShen on 2017/11/22.
+ * Read callback
  */
 
-public final class ReadBundle<T> extends BaseBundle {
-    public String key;
-    public T data;
-    public Class<T> dataClass;
-    public ReadCallback callback;
-
-    public ReadBundle(String key, Class<T> dataClass, ReadCallback callback) {
-        this.key = key;
-        this.dataClass = dataClass;
-        this.callback = callback;
-    }
+public interface ReadArrayCallback<T> {
+    void onResult(boolean success, T[] result);
 }

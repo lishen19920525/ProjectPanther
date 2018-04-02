@@ -32,9 +32,12 @@ public class Constant {
 
     public static final int MSG_WORK_SAVE = -1;
     public static final int MSG_WORK_READ = -2;
-    public static final int MSG_WORK_DELETE = -3;
-    public static final int MSG_WORK_MASS_DELETE = -4;
-    public static final int MSG_WORK_FIND_KEYS_BY_PREFIX = -5;
+    public static final int MSG_WORK_DELETE = -4;
+    public static final int MSG_WORK_MASS_DELETE = -5;
+    public static final int MSG_WORK_FIND_KEYS_BY_PREFIX = -6;
+
+    public static final int MSG_SUBTYPE_NORMAL = 0;
+    public static final int MSG_SUBTYPE_READ_ARRAY = 1;
 
     public static final String JSON_KEY_UPDATE_TIME = "updateTime";
     public static final String JSON_KEY_DATA = "data";

@@ -88,9 +88,9 @@ public class StudentBean {
             return "StudentBean{" +
                     "id=" + id +
                     ", name='" + name + '\'' +
-                    ", birthday=" + birthday.toLocaleString() +
-                    ", cardBalance=" + cardBalance.toPlainString() +
-                    ", gender=" + gender.toString() +
+                    ", birthday=" + birthday +
+                    ", cardBalance=" + cardBalance +
+                    ", gender=" + gender +
                     ", valid=" + valid +
                     ", grade=" + grade +
                     ", credit=" + credit +
