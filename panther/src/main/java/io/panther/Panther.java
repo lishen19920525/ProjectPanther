@@ -42,7 +42,7 @@ import io.panther.callback.FindKeysCallback;
 import io.panther.callback.MassDeleteCallback;
 import io.panther.callback.ReadArrayCallback;
 import io.panther.callback.ReadCallback;
-import io.panther.callback.SaveCallback;
+import io.panther.callback.WriteCallback;
 import io.panther.constant.Constant;
 import io.panther.memorycache.PantherArrayMap;
 import io.panther.memorycache.PantherMemoryCacheMap;
@@ -80,7 +80,11 @@ public final class Panther {
         // memory cache
         memoryCacheMap = new PantherMemoryCacheMap(configuration.memoryCacheSize);
         // open database when PANTHER init
-        openDatabase();
+        try {
+            openDatabase();
+        } catch (Exception e) {
+            logError(e.toString(), new IllegalStateException("DATABASE is unavailable"));
+        }
     }
 
     /**
@@ -119,24 +123,20 @@ public final class Panther {
     /**
      * Open database
      */
-    public void openDatabase() {
-        try {
-            if (database != null && database.isOpen()) {
-                log("database: " + configuration.databaseName + " already open, no need to open again");
-                return;
-            }
-            // read and save cache
-            synchronized (this) {
-                dataMedium = new PantherArrayMap();
-            }
-            synchronized (DB.class) {
-                database = DBFactory.open(configuration.databaseFolder.getAbsolutePath(),
-                        configuration.databaseName);
-            }
-            log("database: " + configuration.databaseName + " open success");
-        } catch (Exception e) {
-            logError("database: " + configuration.databaseName + " open failed", e);
+    private void openDatabase() throws Exception {
+        if (database != null && database.isOpen()) {
+            log("database: " + configuration.databaseName + " already open, no need to open again");
+            return;
         }
+        // read and save cache
+        synchronized (this) {
+            dataMedium = new PantherArrayMap();
+        }
+        synchronized (DB.class) {
+            database = DBFactory.open(configuration.databaseFolder.getAbsolutePath(),
+                    configuration.databaseName);
+        }
+        log("database: " + configuration.databaseName + " open success");
     }
 
     /**
@@ -166,14 +166,14 @@ public final class Panther {
             throw new IllegalArgumentException("KEY or PREFIX can not be null !");
         }
         if (!checkDatabaseAvailable()) {
-            throw new IllegalStateException("DATABASE is unavailable");
+            openDatabase();
         }
     }
 
     /**
      * Save in database synchronously, core method
      * Not recommended to call for storing large data in the main thread
-     * Large data use {@link #writeInDatabaseAsync(String, Object, SaveCallback)}
+     * Large data use {@link #writeInDatabaseAsync(String, Object, WriteCallback)}
      *
      * @param key  key
      * @param data data
@@ -204,7 +204,7 @@ public final class Panther {
      * @param data     data
      * @param callback callback
      */
-    public void writeInDatabaseAsync(String key, Object data, SaveCallback callback) {
+    public void writeInDatabaseAsync(String key, Object data, WriteCallback callback) {
         SaveBundle saveBundle = new SaveBundle(key, data, callback);
         dataMedium.put(Constant.SAVE_KEY_PREFIX + key, saveBundle);
         callOnWorkHandler(Constant.MSG_WORK_SAVE, key);
@@ -655,47 +655,55 @@ public final class Panther {
         switch (msg.what) {
             case Constant.MSG_MAIN_SAVE_CALLBACK:
                 SaveBundle saveBundle = (SaveBundle) dataMedium.get(Constant.SAVE_KEY_PREFIX + key);
-                if (saveBundle != null && saveBundle.callback != null) {
+                if (saveBundle != null) {
                     dataMedium.remove(Constant.SAVE_KEY_PREFIX + key);
-                    saveBundle.callback.onResult(saveBundle.success);
+                    if (saveBundle.callback != null)
+                        saveBundle.callback.onResult(saveBundle.success);
                 }
                 break;
             case Constant.MSG_MAIN_READ_CALLBACK:
                 if (msg.arg1 == Constant.MSG_SUBTYPE_READ_ARRAY) {
                     ReadArrayBundle readArrayBundle = (ReadArrayBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
-                    if (readArrayBundle != null && readArrayBundle.callback != null) {
+                    if (readArrayBundle != null) {
                         dataMedium.remove(Constant.READ_KEY_PREFIX + key);
-                        boolean success = readArrayBundle.data != null;
-                        readArrayBundle.callback.onResult(success, readArrayBundle.data);
+                        if (readArrayBundle.callback != null) {
+                            boolean success = readArrayBundle.data != null;
+                            readArrayBundle.callback.onResult(success, readArrayBundle.data);
+                        }
                     }
                 } else {
                     ReadBundle readBundle = (ReadBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
-                    if (readBundle != null && readBundle.callback != null) {
+                    if (readBundle != null) {
                         dataMedium.remove(Constant.READ_KEY_PREFIX + key);
-                        boolean success = readBundle.data != null;
-                        readBundle.callback.onResult(success, readBundle.data);
+                        if (readBundle.callback != null) {
+                            boolean success = readBundle.data != null;
+                            readBundle.callback.onResult(success, readBundle.data);
+                        }
                     }
                 }
                 break;
             case Constant.MSG_MAIN_DELETE_CALLBACK:
                 DeleteBundle deleteBundle = (DeleteBundle) dataMedium.get(Constant.DELETE_KEY_PREFIX + key);
-                if (deleteBundle != null && deleteBundle.callback != null) {
+                if (deleteBundle != null) {
                     dataMedium.remove(Constant.DELETE_KEY_PREFIX + key);
-                    deleteBundle.callback.onResult(deleteBundle.success);
+                    if (deleteBundle.callback != null)
+                        deleteBundle.callback.onResult(deleteBundle.success);
                 }
                 break;
             case Constant.MSG_MAIN_MASS_DELETE_CALLBACK:
                 MassDeleteBundle massDeleteBundle = (MassDeleteBundle) dataMedium.get(Constant.MASS_DELETE_KEY_PREFIX + key);
-                if (massDeleteBundle != null && massDeleteBundle.callback != null) {
+                if (massDeleteBundle != null) {
                     dataMedium.remove(Constant.MASS_DELETE_KEY_PREFIX + key);
-                    massDeleteBundle.callback.onResult(massDeleteBundle.success);
+                    if (massDeleteBundle.callback != null)
+                        massDeleteBundle.callback.onResult(massDeleteBundle.success);
                 }
                 break;
             case Constant.MSG_MAIN_FIND_KEYS_BY_PREFIX_CALLBACK:
                 FindKeysByPrefixBundle findKeysByPrefixBundle = (FindKeysByPrefixBundle) dataMedium.get(Constant.FIND_KEYS_BY_PREFIX_KEY_PREFIX + key);
-                if (findKeysByPrefixBundle != null && findKeysByPrefixBundle.callback != null) {
+                if (findKeysByPrefixBundle != null) {
                     dataMedium.remove(Constant.FIND_KEYS_BY_PREFIX_KEY_PREFIX + key);
-                    findKeysByPrefixBundle.callback.onResult(findKeysByPrefixBundle.keys);
+                    if (findKeysByPrefixBundle.callback != null)
+                        findKeysByPrefixBundle.callback.onResult(findKeysByPrefixBundle.keys);
                 }
                 break;
         }

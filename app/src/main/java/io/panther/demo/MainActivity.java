@@ -16,7 +16,7 @@ import io.panther.callback.FindKeysCallback;
 import io.panther.callback.MassDeleteCallback;
 import io.panther.callback.ReadArrayCallback;
 import io.panther.callback.ReadCallback;
-import io.panther.callback.SaveCallback;
+import io.panther.callback.WriteCallback;
 import io.panther.demo.bean.Gender;
 import io.panther.demo.bean.StudentBean;
 
@@ -29,8 +29,6 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        Panther.get(this).openDatabase();
 
         studentJack = new StudentBean();
         studentJack.setCardBalance(new BigDecimal(9.1212111102233));
@@ -102,7 +100,7 @@ public class MainActivity extends Activity {
                 }
             });
 
-            Panther.get(getActivity()).writeInDatabaseAsync("students", students, new SaveCallback() {
+            Panther.get(getActivity()).writeInDatabaseAsync("students", students, new WriteCallback() {
                 @Override
                 public void onResult(boolean success) {
                     Panther.get(getActivity()).readArrayFromDatabaseAsync("students", StudentBean.class, new ReadArrayCallback<StudentBean>() {
@@ -161,6 +159,5 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        Panther.get(getActivity()).closeDatabase();
     }
 }
