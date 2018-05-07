@@ -16,7 +16,7 @@
 
 package io.panther.bundle;
 
-import io.panther.callback.SaveCallback;
+import io.panther.callback.WriteCallback;
 
 /**
  * Created by LiShen on 2017/1/11.
@@ -27,9 +27,9 @@ public final class SaveBundle extends BaseBundle {
     public String key;
     public boolean success;
     public Object data;
-    public SaveCallback callback;
+    public WriteCallback callback;
 
-    public SaveBundle(String key, Object data, SaveCallback callback) {
+    public SaveBundle(String key, Object data, WriteCallback callback) {
         this.key = key;
         this.data = data;
         this.callback = callback;

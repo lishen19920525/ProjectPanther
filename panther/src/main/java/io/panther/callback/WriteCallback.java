@@ -21,6 +21,6 @@ package io.panther.callback;
  * Save call back
  */
 
-public interface SaveCallback {
+public interface WriteCallback {
     void onResult(boolean success);
 }
