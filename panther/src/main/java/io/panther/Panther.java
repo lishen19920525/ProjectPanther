@@ -46,7 +46,6 @@ import io.panther.callback.ReadArrayCallback;
 import io.panther.callback.ReadCallback;
 import io.panther.callback.WriteCallback;
 import io.panther.constant.Constant;
-import io.panther.memorycache.PantherArrayMap;
 import io.panther.memorycache.PantherMemoryCacheMap;
 import io.panther.util.ConfigurationParser;
 import io.panther.util.GZIP;
@@ -798,14 +797,14 @@ public final class Panther {
     }
 
     private MainHandler getMainHandler() {
-        if (mainHandler == null) {
+        if (mainHandler == null || mainHandler.reference.get() == null) {
             mainHandler = new MainHandler(this, Looper.getMainLooper());
         }
         return mainHandler;
     }
 
     private WorkHandler getWorkHandler() {
-        if (workThread == null || !workThread.isAlive() || workHandler == null) {
+        if (workThread == null || !workThread.isAlive() || workHandler == null || workHandler.reference.get() == null) {
             workHandler = new WorkHandler(this, getWorkThread().getLooper());
         }
         return workHandler;
@@ -830,16 +829,16 @@ public final class Panther {
     }
 
     private static class MainHandler extends Handler {
-        private final SoftReference<Panther> weakReference;
+        private final SoftReference<Panther> reference;
 
         private MainHandler(Panther panther, Looper Looper) {
             super(Looper);
-            weakReference = new SoftReference<>(panther);
+            reference = new SoftReference<>(panther);
         }
 
         @Override
         public void handleMessage(Message msg) {
-            Panther panther = weakReference.get();
+            Panther panther = reference.get();
             if (panther != null && msg != null) {
                 panther.handleMainMessage(msg);
             }
@@ -847,16 +846,16 @@ public final class Panther {
     }
 
     private static class WorkHandler extends Handler {
-        private final SoftReference<Panther> weakReference;
+        private final SoftReference<Panther> reference;
 
         private WorkHandler(Panther panther, Looper Looper) {
             super(Looper);
-            weakReference = new SoftReference<>(panther);
+            reference = new SoftReference<>(panther);
         }
 
         @Override
         public void handleMessage(Message msg) {
-            Panther panther = weakReference.get();
+            Panther panther = reference.get();
             if (panther != null && msg != null) {
                 panther.handleWorkMessage(msg);
             }
