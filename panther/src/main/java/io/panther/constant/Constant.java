@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Glow Geniuses Studio
+ * Copyright 2018 LISHEN
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,12 +38,6 @@ public class Constant {
 
     public static final int MSG_SUBTYPE_NORMAL = 0;
     public static final int MSG_SUBTYPE_READ_ARRAY = 1;
-
-    public static final String JSON_KEY_UPDATE_TIME = "updateTime";
-    public static final String JSON_KEY_DATA = "data";
-
-    public static final String JSON_OBJECT_PREFIX = "{";
-    public static final String JSON_ARRAY_PREFIX = "[";
 
     public static final String PANTHER_MODULE_NAME = "io.panther.PantherModule";
 

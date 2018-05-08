@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Glow Geniuses Studio
+ * Copyright 2018 LISHEN
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,9 @@ import android.util.Log;
 import com.snappydb.DB;
 import com.snappydb.DBFactory;
 
+import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
+import java.util.Hashtable;
 
 import io.panther.bundle.BaseBundle;
 import io.panther.bundle.DeleteBundle;
@@ -54,14 +56,13 @@ import io.panther.util.JSON;
  * Created by LiShen on 2016/7/8.
  * Panther
  */
-@SuppressWarnings("unchecked")
 public final class Panther {
     private static volatile Panther panther;
 
     private PantherConfiguration configuration;
 
     private static volatile DB database;
-    private static volatile PantherArrayMap<String, BaseBundle> dataMedium;
+    private Hashtable<String, BaseBundle> dataMedium;
 
     private PantherMemoryCacheMap memoryCacheMap;
 
@@ -130,7 +131,7 @@ public final class Panther {
         }
         // read and save cache
         synchronized (this) {
-            dataMedium = new PantherArrayMap();
+            dataMedium = new Hashtable<>();
         }
         synchronized (DB.class) {
             database = DBFactory.open(configuration.databaseFolder.getAbsolutePath(),
@@ -183,7 +184,12 @@ public final class Panther {
         try {
             databaseOperationPreCheck(key);
             // to Json string
-            String dataJson = JSON.toJSONString(data);
+            String dataJson;
+            if (data instanceof String) {
+                dataJson = (String) data;
+            } else {
+                dataJson = JSON.toJSONString(data);
+            }
             // compress
             String dataBundleJsonCompressed = GZIP.compress(dataJson);
             synchronized (database) {
@@ -743,41 +749,51 @@ public final class Panther {
         switch (msg.what) {
             case Constant.MSG_WORK_SAVE:
                 SaveBundle saveBundle = (SaveBundle) dataMedium.get(Constant.SAVE_KEY_PREFIX + key);
-                saveBundle.success = writeInDatabase(saveBundle.key, saveBundle.data);
-                callOnMainHandler(Constant.MSG_MAIN_SAVE_CALLBACK, key);
+                if (saveBundle != null) {
+                    saveBundle.success = writeInDatabase(saveBundle.key, saveBundle.data);
+                    callOnMainHandler(Constant.MSG_MAIN_SAVE_CALLBACK, key);
+                }
                 break;
             case Constant.MSG_WORK_READ:
                 if (msg.arg1 == Constant.MSG_SUBTYPE_READ_ARRAY) {
                     ReadArrayBundle readArrayBundle = (ReadArrayBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
-                    readArrayBundle.data = readArrayFromDatabase(readArrayBundle.key, readArrayBundle.dataClass);
-                    callOnMainHandler(Constant.MSG_MAIN_READ_CALLBACK, key, msg.arg1);
+                    if (readArrayBundle != null) {
+                        readArrayBundle.data = readArrayFromDatabase(readArrayBundle.key, readArrayBundle.dataClass);
+                        callOnMainHandler(Constant.MSG_MAIN_READ_CALLBACK, key, msg.arg1);
+                    }
                 } else {
                     ReadBundle readBundle = (ReadBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
-                    readBundle.data = readFromDatabase(readBundle.key, readBundle.dataClass);
-                    callOnMainHandler(Constant.MSG_MAIN_READ_CALLBACK, key);
+                    if (readBundle != null) {
+                        readBundle.data = readFromDatabase(readBundle.key, readBundle.dataClass);
+                        callOnMainHandler(Constant.MSG_MAIN_READ_CALLBACK, key);
+                    }
                 }
                 break;
             case Constant.MSG_WORK_DELETE:
                 DeleteBundle deleteBundle = (DeleteBundle) dataMedium.get(Constant.DELETE_KEY_PREFIX + key);
-                deleteBundle.success = deleteFromDatabase(deleteBundle.key);
-                callOnMainHandler(Constant.MSG_MAIN_DELETE_CALLBACK, key);
+                if (deleteBundle != null) {
+                    deleteBundle.success = deleteFromDatabase(deleteBundle.key);
+                    callOnMainHandler(Constant.MSG_MAIN_DELETE_CALLBACK, key);
+                }
                 break;
             case Constant.MSG_WORK_MASS_DELETE:
                 MassDeleteBundle massDeleteBundle = (MassDeleteBundle) dataMedium.get(Constant.MASS_DELETE_KEY_PREFIX + key);
-                for (String k : massDeleteBundle.keys) {
-                    if (deleteFromDatabase(k)) {
-                        massDeleteBundle.success = true;
+                if (massDeleteBundle != null) {
+                    for (String k : massDeleteBundle.keys) {
+                        if (deleteFromDatabase(k)) {
+                            massDeleteBundle.success = true;
+                        }
                     }
+                    callOnMainHandler(Constant.MSG_MAIN_MASS_DELETE_CALLBACK, key);
                 }
-                callOnMainHandler(Constant.MSG_MAIN_MASS_DELETE_CALLBACK, key);
                 break;
             case Constant.MSG_WORK_FIND_KEYS_BY_PREFIX:
                 FindKeysByPrefixBundle findKeysByPrefixBundle = (FindKeysByPrefixBundle) dataMedium.get(Constant.FIND_KEYS_BY_PREFIX_KEY_PREFIX + key);
-                findKeysByPrefixBundle.keys = findKeysByPrefix(findKeysByPrefixBundle.prefix);
-                callOnMainHandler(Constant.MSG_MAIN_FIND_KEYS_BY_PREFIX_CALLBACK, key);
+                if (findKeysByPrefixBundle != null) {
+                    findKeysByPrefixBundle.keys = findKeysByPrefix(findKeysByPrefixBundle.prefix);
+                    callOnMainHandler(Constant.MSG_MAIN_FIND_KEYS_BY_PREFIX_CALLBACK, key);
+                }
                 break;
-            default:
-                return;
         }
     }
 
@@ -814,11 +830,11 @@ public final class Panther {
     }
 
     private static class MainHandler extends Handler {
-        private final WeakReference<Panther> weakReference;
+        private final SoftReference<Panther> weakReference;
 
         private MainHandler(Panther panther, Looper Looper) {
             super(Looper);
-            weakReference = new WeakReference<>(panther);
+            weakReference = new SoftReference<>(panther);
         }
 
         @Override
@@ -831,11 +847,11 @@ public final class Panther {
     }
 
     private static class WorkHandler extends Handler {
-        private final WeakReference<Panther> weakReference;
+        private final SoftReference<Panther> weakReference;
 
         private WorkHandler(Panther panther, Looper Looper) {
             super(Looper);
-            weakReference = new WeakReference<>(panther);
+            weakReference = new SoftReference<>(panther);
         }
 
         @Override
