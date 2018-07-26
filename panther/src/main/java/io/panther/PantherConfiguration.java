@@ -61,7 +61,7 @@ public class PantherConfiguration {
             }
             if (!databaseFolderExist) {
                 try {
-                    databaseFolderValid = databaseFolder.mkdir();
+                    databaseFolderValid = databaseFolder.mkdirs();
                 } catch (Exception e) {
                     e.printStackTrace();
                 }

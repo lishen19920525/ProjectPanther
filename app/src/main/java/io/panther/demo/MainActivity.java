@@ -141,10 +141,10 @@ public class MainActivity extends Activity {
             // weak ref
             Panther.get(this).writeInMemory("studentJames", studentJames);
 
-            StudentBean jack = (StudentBean) Panther.get(this).readFromMemory("studentJack", true);
+            StudentBean jack = Panther.get(this).readFromMemory("studentJack", true);
             if (jack != null)
                 Log.i("jack", jack.toString());
-            StudentBean james = (StudentBean) Panther.get(this).readFromMemory("studentJames");
+            StudentBean james =  Panther.get(this).readFromMemory("studentJames");
             if (james != null)
                 Log.i("james", james.toString());
 

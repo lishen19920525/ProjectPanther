@@ -556,31 +556,39 @@ public final class Panther {
      * @param strongly strongly or weak reference
      * @return data
      */
-    public Object readFromMemory(String key, boolean strongly) {
-        Object data = null;
+    public <V> V readFromMemory(String key, boolean strongly) {
+        V data = null;
+        Object dataTemp = memoryCacheMap.get(key);
         if (strongly) {
-            data = memoryCacheMap.get(key);
-            if (data instanceof WeakReference) {
-                data = null;
+            if (dataTemp instanceof WeakReference) {
                 try {
                     throw new IllegalArgumentException("You may have chosen the wrong reference type");
                 } catch (IllegalArgumentException e) {
+                    e.printStackTrace();
+                }
+            } else {
+                try {
+                    if (dataTemp != null)
+                        data = (V) dataTemp;
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
         } else {
-            WeakReference<Object> dataReference = null;
             try {
-                dataReference = (WeakReference<Object>) memoryCacheMap.get(key);
-            } catch (Exception ignore) {
-                try {
+                if (dataTemp != null && !(dataTemp instanceof WeakReference)) {
+                    dataTemp = null;
                     throw new IllegalArgumentException("You may have chosen the wrong reference type");
-                } catch (IllegalArgumentException e) {
+                }
+            } catch (IllegalArgumentException e) {
+                e.printStackTrace();
+            }
+            if (dataTemp != null) {
+                try {
+                    data = ((WeakReference<V>) dataTemp).get();
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
-            }
-            if (dataReference != null) {
-                data = dataReference.get();
             }
         }
         log("{ key = " + key + " data = " + data + " } read from memory finished");
@@ -593,7 +601,7 @@ public final class Panther {
      * @param key key
      * @return data
      */
-    public Object readFromMemory(String key) {
+    public <V> V readFromMemory(String key) {
         return readFromMemory(key, false);
     }
 

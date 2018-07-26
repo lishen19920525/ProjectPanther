@@ -30,6 +30,7 @@ android {
             signingConfig signingConfigs.release
         }
     }
+    buildToolsVersion '27.0.3'
 }
 
 dependencies {
@@ -42,7 +43,6 @@ dependencies {
     implementation 'com.snappydb:snappydb-lib:0.5.2'
     implementation 'com.esotericsoftware.kryo:kryo:2.24.0'
     implementation 'com.google.code.gson:gson:2.8.2'
-
     // compile(name: 'panther-release-0.0.2', ext: 'aar')
 }
 repositories {
