@@ -43,6 +43,7 @@ public class PantherMemoryCacheMap {
         }
         if (value == null) {
             cacheMap.remove(key);
+            return;
         }
         cacheMap.put(key, value);
     }
