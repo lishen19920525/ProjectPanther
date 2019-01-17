@@ -2,16 +2,25 @@
 A concise and quick Android KV database ( based on [SnappyDB](https://github.com/nhachicha/SnappyDB) )
 
 # How to use
-### 1. Download aar
-Latest release version: [panther.aar](https://github.com/lishen19920525/ProjectPanther/releases)
+### 1. Implementation
+[![](https://jitpack.io/v/lishen19920525/ProjectPanther.svg)](https://jitpack.io/#lishen19920525/ProjectPanther)
 </br>
 Put aar file into your project
 </br>
 And add some dependencies into your gradle
 ```groovy
-  api 'com.snappydb:snappydb-lib:0.5.2'
-  api 'com.esotericsoftware.kryo:kryo:2.24.0'
-  api 'com.google.code.gson:gson:2.8.2'
+	allprojects {
+		repositories {
+			...
+			maven { url 'https://jitpack.io' }
+		}
+	}
+```
+```groovy
+  implementation 'com.snappydb:snappydb-lib:0.5.2'
+  implementation 'com.esotericsoftware.kryo:kryo:2.24.0'
+  implementation 'com.google.code.gson:gson:2.8.2'
+  implementation 'com.github.lishen19920525:ProjectPanther:v1.0.0'
 ```
 
 ### 2. Configure the Panther
