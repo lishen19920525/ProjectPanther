@@ -18,13 +18,7 @@ package io.panther.memorycache;
 
 import android.text.TextUtils;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
 import java.util.Set;
-
-import io.panther.bundle.VisitTimeBundle;
 
 /**
  * Created by LiShen on 2017/11/21.
@@ -33,37 +27,21 @@ import io.panther.bundle.VisitTimeBundle;
 
 public class PantherMemoryCacheMap {
     private int maxSize;
-    private static volatile PantherArrayMap<String, Object> cacheMap = new PantherArrayMap<>();
-    private static volatile List<VisitTimeBundle> visitTimeList = new ArrayList<>();
-    private Comparator<VisitTimeBundle> visitTimeComparator;
+    private static volatile LruCache<String, Object> cacheMap;
 
     public PantherMemoryCacheMap(int maxSize) {
         if (maxSize <= 0) {
             throw new IllegalArgumentException("maxSize <= 0");
         }
         this.maxSize = maxSize;
-        visitTimeComparator = new Comparator<VisitTimeBundle>() {
-            @Override
-            public int compare(VisitTimeBundle v1, VisitTimeBundle v2) {
-                return v1.visitTime.compareTo(v2.visitTime);
-            }
-        };
+        cacheMap = new LruCache<>(maxSize);
     }
 
     public synchronized void put(String key, Object value) {
         if (TextUtils.isEmpty(key)) {
             return;
         }
-        if (cacheMap.containsKey(key)) {
-            updateVisitTime(key, System.currentTimeMillis());
-        } else {
-            visitTimeList.add(new VisitTimeBundle(key, System.currentTimeMillis()));
-        }
         cacheMap.put(key, value);
-        if (cacheMap.size() > maxSize) {
-            Collections.sort(visitTimeList, visitTimeComparator);
-            delete(visitTimeList.get(0).key);
-        }
     }
 
     public synchronized void delete(String key) {
@@ -71,28 +49,17 @@ public class PantherMemoryCacheMap {
             return;
         }
         cacheMap.remove(key);
-        int flag = -1;
-        for (int i = 0; i < visitTimeList.size(); i++) {
-            if (visitTimeList.get(i).key.equals(key)) {
-                flag = i;
-            }
-        }
-        if (flag >= 0) {
-            visitTimeList.remove(flag);
-        }
     }
 
     public synchronized Object get(String key) {
         if (TextUtils.isEmpty(key)) {
             return null;
         }
-        updateVisitTime(key, System.currentTimeMillis());
         return cacheMap.get(key);
     }
 
     public synchronized void clear() {
-        cacheMap.clear();
-        visitTimeList.clear();
+        cacheMap.evictAll();
     }
 
     public synchronized int size() {
@@ -102,15 +69,6 @@ public class PantherMemoryCacheMap {
     public synchronized String[] keySet() {
         Set<String> keySet = cacheMap.keySet();
         return keySet.toArray(new String[keySet.size()]);
-    }
-
-    private void updateVisitTime(String key, Long visitTime) {
-        for (VisitTimeBundle v : visitTimeList) {
-            if (v.key.equals(key)) {
-                v.visitTime = visitTime;
-                break;
-            }
-        }
     }
 
     @Override

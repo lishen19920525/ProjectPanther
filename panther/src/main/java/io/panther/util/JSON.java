@@ -17,10 +17,16 @@
 package io.panther.util;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
+import com.google.gson.JsonSerializationContext;
+import com.google.gson.JsonSerializer;
 import com.google.gson.reflect.TypeToken;
 
 import java.lang.reflect.Array;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,7 +36,17 @@ import java.util.List;
  */
 
 public class JSON {
-    private static final Gson GSON = new Gson();
+    private static final Gson GSON = new GsonBuilder().
+            registerTypeAdapter(Double.class, new JsonSerializer<Double>() {
+                @Override
+                public JsonElement serialize(Double src, Type typeOfSrc, JsonSerializationContext context) {
+                    if (src == src.longValue())
+                        return new JsonPrimitive(src.longValue());
+                    return new JsonPrimitive(src);
+                }
+            })
+            .disableHtmlEscaping()
+            .create();
 
     public static String toJSONString(Object obj) {
         try {
