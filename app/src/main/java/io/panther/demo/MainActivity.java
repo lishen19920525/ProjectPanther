@@ -144,11 +144,21 @@ public class MainActivity extends Activity {
             StudentBean jack = Panther.get(this).readFromMemory("studentJack", true);
             if (jack != null)
                 Log.i("jack", jack.toString());
-            StudentBean james =  Panther.get(this).readFromMemory("studentJames");
+            StudentBean james = Panther.get(this).readFromMemory("studentJames");
             if (james != null)
                 Log.i("james", james.toString());
 
             Panther.get(this).deleteFromMemory("studentJames");
+
+            Panther.get(this).writeInMemory("Curry", "Chef Curry!!!");
+            Panther.get(this).writeInMemory("Curry", null);
+            Panther.get(this).writeInMemory("Curry", null);
+            Object curry = Panther.get(this).readFromMemory("Curry");
+            if (curry != null) {
+                Log.i("curry", curry.toString());
+            } else {
+                Log.i("curry", "null");
+            }
         }
     }
 

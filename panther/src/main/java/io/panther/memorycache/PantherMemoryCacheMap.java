@@ -41,6 +41,9 @@ public class PantherMemoryCacheMap {
         if (TextUtils.isEmpty(key)) {
             return;
         }
+        if (value == null) {
+            cacheMap.remove(key);
+        }
         cacheMap.put(key, value);
     }
 
