@@ -4,6 +4,7 @@ A concise and quick Android KV database ( based on [SnappyDB](https://github.com
 # How to use
 ### 1. Implementation
 [![](https://jitpack.io/v/lishen19920525/ProjectPanther.svg)](https://jitpack.io/#lishen19920525/ProjectPanther)
+</br>
 Add some dependencies into your gradle
 ```groovy
 	allprojects {
