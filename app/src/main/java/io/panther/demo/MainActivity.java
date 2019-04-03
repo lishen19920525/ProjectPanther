@@ -75,6 +75,15 @@ public class MainActivity extends Activity {
 
     public void onClick(View v) {
         if (v.getId() == R.id.btnMainDatabase) {
+            Panther.get(this).writeInDatabase("string1", "{ \"key\":1234 }");
+            Panther.get(this).readStringFromDatabase("string1");
+
+            Panther.get(this).writeInDatabase("string2", "{}");
+            Panther.get(this).readStringFromDatabase("string2");
+
+            Panther.get(this).writeInDatabase("string3", "[]");
+            Panther.get(this).readStringFromDatabase("string3");
+
             Panther.get(getActivity()).writeInDatabase("stu_jack", studentJack);
             Panther.get(getActivity()).writeInDatabase("stu_james", studentJames);
             Panther.get(getActivity()).writeInDatabase("test_1", 1);

@@ -56,7 +56,7 @@ public final class Panther {
     private static volatile Panther panther;
 
     @NonNull
-    PantherConfiguration configuration;
+    private PantherConfiguration configuration;
 
     // database
     private final PantherDatabase database = new PantherDatabase();
@@ -278,7 +278,11 @@ public final class Panther {
                     throw new RuntimeException("Read { key = " + key + " } from database failed, GZIP failed");
                 }
             }
-            data = JSONUtil.parseObject(dataJson, dataClass);
+            if (dataClass == String.class) {
+                data = (T) dataJson;
+            } else {
+                data = JSONUtil.parseObject(dataJson, dataClass);
+            }
             if (data != null) {
                 log("Read { key = " + key + " value = " + dataJson + " } read from database finished");
             } else {
