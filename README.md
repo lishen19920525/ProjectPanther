@@ -21,7 +21,7 @@ Add some dependencies into your gradle
   implementation 'com.android.support:support-v4:28.0.0'
   implementation 'io.reactivex.rxjava2:rxjava:2.2.7'
   implementation 'io.reactivex.rxjava2:rxandroid:2.1.1'
-  implementation 'com.github.lishen19920525:ProjectPanther:2.0.1'
+  implementation 'com.github.lishen19920525:ProjectPanther:2.0.2'
 ```
 
 ### 2. Configure the Panther
