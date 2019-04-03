@@ -18,7 +18,10 @@ Add some dependencies into your gradle
   implementation 'com.snappydb:snappydb-lib:0.5.2'
   implementation 'com.esotericsoftware.kryo:kryo:2.24.0'
   implementation 'com.google.code.gson:gson:2.8.2'
-  implementation 'com.github.lishen19920525:ProjectPanther:v1.0.0'
+  implementation 'com.android.support:support-v4:28.0.0'
+  implementation 'io.reactivex.rxjava2:rxjava:2.2.7'
+  implementation 'io.reactivex.rxjava2:rxandroid:2.1.1'
+  implementation 'com.github.lishen19920525:ProjectPanther:v2.0.1'
 ```
 
 ### 2. Configure the Panther
