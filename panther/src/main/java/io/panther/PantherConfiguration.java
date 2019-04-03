@@ -17,11 +17,11 @@
 package io.panther;
 
 import android.content.Context;
+import android.support.v4.content.ContextCompat;
 import android.text.TextUtils;
 
 import java.io.File;
 
-import io.panther.constant.Constant;
 
 /**
  * Created by LiShen on 2017/11/21.
@@ -44,13 +44,13 @@ public class PantherConfiguration {
 
         // application context
         if (context == null) {
-            throw new NullPointerException("Context can not be null!");
+            throw new IllegalArgumentException("Context can not be null!");
         }
-        // default database name
+        // default core name
         if (TextUtils.isEmpty(databaseName)) {
             databaseName = context.getPackageName();
         }
-        // database folder
+        // core folder
         boolean databaseFolderValid = false;
         if (databaseFolder != null) {
             boolean databaseFolderExist = false;
@@ -70,14 +70,19 @@ public class PantherConfiguration {
             }
         }
         if (!databaseFolderValid) {
-            databaseFolder = context.getFilesDir();
+            File[] folders = ContextCompat.getExternalFilesDirs(context, null);
+            if (folders.length == 0) {
+                databaseFolder = context.getFilesDir();
+            } else {
+                databaseFolder = folders[0];
+            }
         }
         if (databaseFolder == null) {
-            throw new NullPointerException("Database folder can not be null!");
+            throw new IllegalArgumentException("Database folder can not be null!");
         }
         // memory cache max size
         if (memoryCacheSize <= 0) {
-            memoryCacheSize = Constant.DEFAULT_MEMORY_CACHE_SIZE;
+            memoryCacheSize = Panther.DEFAULT_MEMORY_CACHE_SIZE;
         }
     }
 

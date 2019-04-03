@@ -16,26 +16,26 @@
 
 package io.panther.util;
 
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
-import com.google.gson.reflect.TypeToken;
 
 import java.lang.reflect.Array;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Created by LiShen on 2018/4/2.
  * Fake fastjson with Gson
  */
-
-public class JSON {
+public class JSONUtil {
     private static final Gson GSON = new GsonBuilder().
             registerTypeAdapter(Double.class, new JsonSerializer<Double>() {
                 @Override
@@ -48,6 +48,7 @@ public class JSON {
             .disableHtmlEscaping()
             .create();
 
+    @Nullable
     public static String toJSONString(Object obj) {
         try {
             return GSON.toJson(obj);
@@ -57,6 +58,7 @@ public class JSON {
         }
     }
 
+    @Nullable
     public static <T> T parseObject(String json, Class<T> clazz) {
         try {
             return GSON.fromJson(json, clazz);
@@ -66,19 +68,51 @@ public class JSON {
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @Nullable
     public static <T> T[] parseArray(String json, Class<T> clazz) {
+        List<T> list = parseList(json, clazz);
+        if (list != null) {
+            T[] tArray = (T[]) Array.newInstance(clazz, list.size());
+            return list.toArray(tArray);
+        } else {
+            return null;
+        }
+
+    }
+
+    @Nullable
+    public static <T> List<T> parseList(String json, Class<T> clazz) {
+        List<T> list = null;
         try {
-            JsonObject[] jsonObjects = GSON.fromJson(json, new TypeToken<JsonObject[]>() {
-            }.getType());
-            List<T> list = new ArrayList<>();
-            for (JsonObject jsonObject : jsonObjects) {
-                list.add(GSON.fromJson(jsonObject, clazz));
-            }
-            T[] ts = (T[]) Array.newInstance(clazz, list.size());
-            return list.toArray(ts);
+            Type type = new ListParameterizedTypeImpl(clazz);
+            list = GSON.fromJson(json, type);
         } catch (Exception e) {
             e.printStackTrace();
+        }
+        return list;
+    }
+
+    private static class ListParameterizedTypeImpl implements ParameterizedType {
+        private Class clazz;
+
+        private ListParameterizedTypeImpl(Class clz) {
+            clazz = clz;
+        }
+
+        @NonNull
+        @Override
+        public Type[] getActualTypeArguments() {
+            return new Type[]{clazz};
+        }
+
+        @NonNull
+        @Override
+        public Type getRawType() {
+            return List.class;
+        }
+
+        @Override
+        public Type getOwnerType() {
             return null;
         }
     }

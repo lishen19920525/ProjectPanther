@@ -1,5 +1,6 @@
 package io.panther.util;
 
+import android.support.annotation.Nullable;
 import android.text.TextUtils;
 
 import java.io.ByteArrayInputStream;
@@ -12,10 +13,11 @@ import java.util.zip.GZIPOutputStream;
  * GZIP compress Util
  */
 
-public class GZIP {
+public class GZIPUtil {
+    @Nullable
     public static String compress(String data) {
         if (TextUtils.isEmpty(data)) {
-            return data;
+            return null;
         }
         try {
             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
@@ -26,13 +28,14 @@ public class GZIP {
             byteArrayOutputStream.close();
             return compressData;
         } catch (Exception ignore) {
-            return data;
+            return null;
         }
     }
 
+    @Nullable
     public static String decompress(String data) {
         if (TextUtils.isEmpty(data)) {
-            return data;
+            return null;
         }
         try {
             String decompressedStr = "";
@@ -50,7 +53,7 @@ public class GZIP {
             gzipInputStream.close();
             return decompressedStr;
         } catch (Exception e) {
-            return data;
+            return null;
         }
     }
 }

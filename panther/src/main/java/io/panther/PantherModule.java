@@ -17,6 +17,7 @@
 package io.panther;
 
 import android.content.Context;
+import android.support.annotation.NonNull;
 
 /**
  * Created by LiShen on 2017/11/28.
@@ -56,5 +57,6 @@ public interface PantherModule {
      *
      * @return configuration
      */
+    @NonNull
     PantherConfiguration applyConfiguration(Context context);
 }

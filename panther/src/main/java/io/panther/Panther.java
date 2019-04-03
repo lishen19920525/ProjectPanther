@@ -17,74 +17,67 @@
 package io.panther;
 
 import android.content.Context;
-import android.os.Handler;
-import android.os.HandlerThread;
-import android.os.Looper;
-import android.os.Message;
-import android.os.Process;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.support.v4.util.ArrayMap;
 import android.text.TextUtils;
 import android.util.Log;
 
-import com.snappydb.DB;
-import com.snappydb.DBFactory;
+import java.util.Arrays;
+import java.util.List;
 
-import java.lang.ref.SoftReference;
-import java.lang.ref.WeakReference;
-import java.util.Hashtable;
-
-import io.panther.bundle.BaseBundle;
-import io.panther.bundle.DeleteBundle;
-import io.panther.bundle.FindKeysByPrefixBundle;
-import io.panther.bundle.MassDeleteBundle;
-import io.panther.bundle.ReadArrayBundle;
-import io.panther.bundle.ReadBundle;
-import io.panther.bundle.SaveBundle;
-import io.panther.callback.DeleteCallback;
-import io.panther.callback.FindKeysCallback;
-import io.panther.callback.MassDeleteCallback;
-import io.panther.callback.ReadArrayCallback;
-import io.panther.callback.ReadCallback;
-import io.panther.callback.WriteCallback;
-import io.panther.constant.Constant;
-import io.panther.memorycache.PantherMemoryCacheMap;
-import io.panther.util.ConfigurationParser;
-import io.panther.util.GZIP;
-import io.panther.util.JSON;
+import io.panther.observer.DataBaseSuccessObserver;
+import io.panther.observer.DatabaseListObserver;
+import io.panther.observer.DatabaseObserver;
+import io.panther.util.GZIPUtil;
+import io.panther.util.JSONUtil;
+import io.reactivex.Observable;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.functions.Function;
+import io.reactivex.schedulers.Schedulers;
 
 /**
+ * TODO Challenge of Multi Process
  * Created by LiShen on 2016/7/8.
  * Panther
  */
+@SuppressWarnings("unchecked")
 public final class Panther {
+    static final String PANTHER_MODULE_NAME = "io.panther.PantherModule";
+
+    static final int DEFAULT_MEMORY_CACHE_SIZE = 128;
+
+    private static final String KEY = "key";
+    private static final String DATA = "data";
+    private static final String DATA_CLASS = "dataClass";
+
+    private static final int GZIP_TRIGGER_LENGTH = 1024;
+
     private static volatile Panther panther;
 
-    private PantherConfiguration configuration;
+    @NonNull
+    PantherConfiguration configuration;
 
-    private static volatile DB database;
-    private Hashtable<String, BaseBundle> dataMedium;
-
-    private PantherMemoryCacheMap memoryCacheMap;
-
-    private MainHandler mainHandler;
-    private HandlerThread workThread;
-    private WorkHandler workHandler;
+    // database
+    private final PantherDatabase database = new PantherDatabase();
+    // memory cache
+    private final PantherMemoryCache memoryCache;
 
     private Panther(PantherConfiguration configuration) {
-        // configuration
         this.configuration = configuration;
-        log("========== Panther configuration =========="
-                + "\ndatabase folder: " + configuration.databaseFolder.getAbsolutePath()
-                + "\ndatabase name: " + configuration.databaseName
-                + "\nmemory cache size: " + configuration.memoryCacheSize
+
+        // configuration
+        log("\n========== Panther configuration =========="
+                + "\nDatabase folder: " + configuration.databaseFolder.getPath()
+                + "\nDatabase name: " + configuration.databaseName
+                + "\nMemory cache size: " + configuration.memoryCacheSize
                 + "\n===========================================");
+
         // memory cache
-        memoryCacheMap = new PantherMemoryCacheMap(configuration.memoryCacheSize);
+        memoryCache = new PantherMemoryCache(configuration.memoryCacheSize);
+
         // open database when PANTHER init
-        try {
-            openDatabase();
-        } catch (Exception e) {
-            logError(e.toString(), new IllegalStateException("DATABASE is unavailable"));
-        }
+        openDatabase();
     }
 
     /**
@@ -97,7 +90,7 @@ public final class Panther {
         if (panther == null) {
             synchronized (Panther.class) {
                 if (panther == null) {
-                    ConfigurationParser parser = new ConfigurationParser(context.getApplicationContext());
+                    ConfigurationParser parser = new ConfigurationParser(context);
                     panther = new Panther(parser.parse());
                 }
             }
@@ -106,37 +99,35 @@ public final class Panther {
     }
 
     /**
-     * Close the database
+     * Open database
      */
-    public void closeDatabase() {
-        if (database != null) {
-            try {
-                synchronized (database) {
-                    database.close();
-                }
-            } catch (Exception e) {
-                logError("close database failed", e);
-            }
+    private boolean openDatabase() {
+        boolean result;
+        synchronized (database) {
+            result = database.open(configuration.databaseFolder.getPath(), configuration.databaseName);
         }
+        if (result) {
+            log("Database " + configuration.databaseName + " open success");
+        } else {
+            logError("Database " + configuration.databaseName + " open failed",
+                    new RuntimeException("Database " + configuration.databaseName + " open failed"));
+        }
+        return result;
     }
 
     /**
-     * Open database
+     * Close the database
      */
-    private void openDatabase() throws Exception {
-        if (database != null && database.isOpen()) {
-            log("database: " + configuration.databaseName + " already open, no need to open again");
-            return;
+    public void closeDatabase() {
+        synchronized (database) {
+            boolean result = database.close();
+            if (result) {
+                log("Database " + configuration.databaseName + " close success");
+            } else {
+                logError(configuration.databaseName + "Database close failed",
+                        new RuntimeException("Database close failed"));
+            }
         }
-        // read and save cache
-        synchronized (this) {
-            dataMedium = new Hashtable<>();
-        }
-        synchronized (DB.class) {
-            database = DBFactory.open(configuration.databaseFolder.getAbsolutePath(),
-                    configuration.databaseName);
-        }
-        log("database: " + configuration.databaseName + " open success");
     }
 
     /**
@@ -145,61 +136,85 @@ public final class Panther {
      * @return available
      */
     private boolean checkDatabaseAvailable() {
-        boolean available = false;
-        try {
-            if (database != null && database.isOpen()) {
-                available = true;
-            }
-        } catch (Exception ignore) {
+        boolean result;
+        synchronized (database) {
+            result = database.isAvailable();
         }
-        return available;
+        return result;
     }
 
     /**
      * Check the key and database before the database operation
      *
      * @param key key
-     * @throws Exception exception
      */
-    private void databaseOperationPreCheck(String key) throws Exception {
+    private void databaseOperationPreCheck(String key) throws RuntimeException {
         if (TextUtils.isEmpty(key)) {
             throw new IllegalArgumentException("KEY or PREFIX can not be null !");
         }
         if (!checkDatabaseAvailable()) {
-            openDatabase();
+            boolean openResult = openDatabase();
+            if (!openResult)
+                throw new RuntimeException("Database open failed!");
         }
     }
 
     /**
      * Save in database synchronously, core method
      * Not recommended to call for storing large data in the main thread
-     * Large data use {@link #writeInDatabaseAsync(String, Object, WriteCallback)}
+     * Large data use {@link #writeInDatabaseAsync(String, Object, DataBaseSuccessObserver)}
      *
      * @param key  key
      * @param data data
      * @return result
      */
     public boolean writeInDatabase(String key, Object data) {
+        String dataJson;
         try {
+            // pre check
             databaseOperationPreCheck(key);
+            // data null --> delete
+            if (data == null) {
+                deleteFromDatabase(key);
+                return true;
+            }
             // to Json string
-            String dataJson;
             if (data instanceof String) {
                 dataJson = (String) data;
             } else {
-                dataJson = JSON.toJSONString(data);
+                dataJson = JSONUtil.toJSONString(data);
+            }
+            // gzip
+            if (TextUtils.isEmpty(dataJson)) {
+                throw new RuntimeException("Save data parse failed!");
+            }
+            // start
+            DataBundle dataBundle = new DataBundle();
+            dataBundle.key = key;
+            dataBundle.dataJson = dataJson;
+            dataBundle.gzip = false;
+            if (dataJson != null && dataJson.length() >= GZIP_TRIGGER_LENGTH) {
+                String dataJsonGzip = GZIPUtil.compress(dataJson);
+                if (!TextUtils.isEmpty(dataJson)) {
+                    dataBundle.dataJson = dataJsonGzip;
+                    dataBundle.gzip = true;
+                }
+            }
+            dataBundle.time = System.currentTimeMillis();
+            String dataBundleJson = JSONUtil.toJSONString(dataBundle);
+            if (dataBundleJson == null) {
+                throw new RuntimeException("Save data parse failed!");
             }
             // compress
-            String dataBundleJsonCompressed = GZIP.compress(dataJson);
             synchronized (database) {
-                database.put(key, dataBundleJsonCompressed);
+                database.get().put(key, dataBundleJson);
+                log("{ key = " + key + " value = " + dataJson + " } saved in database finished");
             }
-            log("key = " + key + " value = " + dataJson + " saved in database finished");
-            return true;
         } catch (Exception e) {
-            logError("key = " + key + " value = " + String.valueOf(data) + " save in database failed", e);
+            logError("{ key = " + key + " value = " + String.valueOf(data) + " } save in database failed", e);
             return false;
         }
+        return true;
     }
 
     /**
@@ -209,52 +224,68 @@ public final class Panther {
      * @param data     data
      * @param callback callback
      */
-    public void writeInDatabaseAsync(String key, Object data, WriteCallback callback) {
-        SaveBundle saveBundle = new SaveBundle(key, data, callback);
-        dataMedium.put(Constant.SAVE_KEY_PREFIX + key, saveBundle);
-        callOnWorkHandler(Constant.MSG_WORK_SAVE, key);
+    public void writeInDatabaseAsync(String key, Object data, DataBaseSuccessObserver callback) {
+        ArrayMap<String, Object> bundle = new ArrayMap<>();
+        bundle.put(KEY, key);
+        bundle.put(DATA, data);
+        Observable.just(bundle)
+                .map(new Function<ArrayMap<String, Object>, Boolean>() {
+                    @Override
+                    public Boolean apply(ArrayMap<String, Object> bundle) throws Exception {
+                        String key = (String) bundle.get(KEY);
+                        Object data = bundle.get(DATA);
+                        bundle.clear();
+                        return writeInDatabase(key, data);
+                    }
+                })
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(callback);
     }
 
 
     /**
      * Read from database synchronously, core method.
      * Not recommended to call for read large data in the main thread.
-     * Read large data use {@link #readFromDatabaseAsync(String, Class, ReadCallback)}
+     * Read large data use {@link #readFromDatabaseAsync(String, Class, DatabaseObserver)}
      *
      * @param key       key
      * @param dataClass class of data
      * @return data
      */
+    @Nullable
     public <T> T readFromDatabase(String key, Class<T> dataClass) {
-        String dataJson = null;
         T data = null;
         try {
+            // pre check
             databaseOperationPreCheck(key);
-            // read data json string compressed
+            // read data bundle json
+            String dataBundleJson;
             synchronized (database) {
-                dataJson = database.get(key);
+                dataBundleJson = database.get().get(key);
             }
-        } catch (Exception e) {
-            logError("read { key = " + key + " } from database failed", e);
-        }
-        if (!TextUtils.isEmpty(dataJson)) {
-            // decompress
-            dataJson = GZIP.decompress(dataJson);
-            // data parse
-            if (dataClass == String.class) {
-                // String.class
-                data = (T) dataJson;
-            } else {
-                // parse to object
-                try {
-                    data = JSON.parseObject(dataJson, dataClass);
-                } catch (Exception e) {
-                    logError("read { key = " + key + " } from database parse failed", e);
+            if (dataBundleJson == null) {
+                throw new RuntimeException("Read { key = " + key + " } from database failed, no data");
+            }
+            DataBundle dataBundle = JSONUtil.parseObject(dataBundleJson, DataBundle.class);
+            if (dataBundle == null) {
+                throw new RuntimeException("Read { key = " + key + " } from database failed, parse failed");
+            }
+            String dataJson = dataBundle.dataJson;
+            if (dataBundle.gzip) {
+                dataJson = GZIPUtil.decompress(dataBundle.dataJson);
+                if (dataJson == null) {
+                    throw new RuntimeException("Read { key = " + key + " } from database failed, GZIP failed");
                 }
             }
-        }
-        if (!TextUtils.isEmpty(dataJson) && data != null) {
-            log("key = " + key + " value = " + dataJson + " read from database finished");
+            data = JSONUtil.parseObject(dataJson, dataClass);
+            if (data != null) {
+                log("Read { key = " + key + " value = " + dataJson + " } read from database finished");
+            } else {
+                throw new RuntimeException("Read { key = " + key + " } from database failed, parse failed");
+            }
+        } catch (Exception e) {
+            logError("Read { key = " + key + " } from database failed", e);
         }
         return data;
     }
@@ -266,60 +297,93 @@ public final class Panther {
      * @param dataClass class of data
      * @param callback  callback
      */
-    public <T> void readFromDatabaseAsync(String key, Class<T> dataClass, ReadCallback<T> callback) {
-        ReadBundle<T> readBundle = new ReadBundle(key, dataClass, callback);
-        dataMedium.put(Constant.READ_KEY_PREFIX + key, readBundle);
-        callOnWorkHandler(Constant.MSG_WORK_READ, key);
+    public <T> void readFromDatabaseAsync(String key, Class<T> dataClass, DatabaseObserver<T> callback) {
+        ArrayMap<String, Object> bundle = new ArrayMap<>();
+        bundle.put(KEY, key);
+        bundle.put(DATA_CLASS, dataClass);
+        Observable.just(bundle)
+                .map(new Function<ArrayMap<String, Object>, T>() {
+                    @Override
+                    public T apply(ArrayMap<String, Object> bundle) throws Exception {
+                        String key = (String) bundle.get(KEY);
+                        Class<T> dataClass = (Class<T>) bundle.get(DATA_CLASS);
+                        return readFromDatabase(key, dataClass);
+                    }
+                })
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(callback);
     }
 
     /**
-     * Read array data from database synchronously, core method.
+     * Read array data from database synchronously, database method.
      * Not recommended to call for read large data in the main thread.
-     * Read large data use {@link #readArrayFromDatabaseAsync(String, Class, ReadArrayCallback)}
+     * Read large data use {@link #readListFromDatabaseAsync(String, Class, DatabaseListObserver)}
      *
      * @param key       key
      * @param dataClass class of data
      * @return array data
      */
-    public <T> T[] readArrayFromDatabase(String key, Class<T> dataClass) {
-        String dataJson = null;
-        T[] data = null;
+    @Nullable
+    public <T> List<T> readListFromDatabase(String key, Class<T> dataClass) {
+        List<T> data = null;
         try {
+            // pre check
             databaseOperationPreCheck(key);
-            // read data json string compressed
+            // read data bundle json
+            String dataBundleJson;
             synchronized (database) {
-                dataJson = database.get(key);
+                dataBundleJson = database.get().get(key);
+            }
+            if (dataBundleJson == null) {
+                throw new RuntimeException("Read { key = " + key + " } from database failed, no data");
+            }
+            DataBundle dataBundle = JSONUtil.parseObject(dataBundleJson, DataBundle.class);
+            if (dataBundle == null) {
+                throw new RuntimeException("Read { key = " + key + " } from database failed, parse failed");
+            }
+            String dataJson = dataBundle.dataJson;
+            if (dataBundle.gzip) {
+                dataJson = GZIPUtil.decompress(dataBundle.dataJson);
+                if (dataJson == null) {
+                    throw new RuntimeException("Read { key = " + key + " } from database failed, GZIP failed");
+                }
+            }
+            data = JSONUtil.parseList(dataJson, dataClass);
+            if (data != null) {
+                log("Read { key = " + key + " value = " + dataJson + " } read from database finished");
+            } else {
+                throw new RuntimeException("Read { key = " + key + " } from database failed, parse failed");
             }
         } catch (Exception e) {
-            logError("read { key = " + key + " } from database failed", e);
-        }
-        if (!TextUtils.isEmpty(dataJson)) {
-            // decompress
-            dataJson = GZIP.decompress(dataJson);
-            // data parse
-            try {
-                data = JSON.parseArray(dataJson, dataClass);
-            } catch (Exception e) {
-                logError("read { key = " + key + " } from database parse failed", e);
-            }
-        }
-        if (!TextUtils.isEmpty(dataJson) && data != null) {
-            log("key = " + key + " value = " + dataJson + " read from database finished");
+            logError("Read { key = " + key + " } from database failed", e);
         }
         return data;
     }
 
     /**
-     * Read array data from database asynchronously
+     * Read list data from database asynchronously
      *
      * @param key       key
      * @param dataClass class of data
      * @param callback  callback
      */
-    public <T> void readArrayFromDatabaseAsync(String key, Class<T> dataClass, ReadArrayCallback<T> callback) {
-        ReadArrayBundle<T> readBundle = new ReadArrayBundle(key, dataClass, callback);
-        dataMedium.put(Constant.READ_KEY_PREFIX + key, readBundle);
-        callOnWorkHandler(Constant.MSG_WORK_READ, key, Constant.MSG_SUBTYPE_READ_ARRAY);
+    public <T> void readListFromDatabaseAsync(String key, Class<T> dataClass, DatabaseListObserver<T> callback) {
+        ArrayMap<String, Object> bundle = new ArrayMap<>();
+        bundle.put(KEY, key);
+        bundle.put(DATA_CLASS, dataClass);
+        Observable.just(bundle)
+                .map(new Function<ArrayMap<String, Object>, List<T>>() {
+                    @Override
+                    public List<T> apply(ArrayMap<String, Object> bundle) throws Exception {
+                        String key = (String) bundle.get(KEY);
+                        Class<T> dataClass = (Class<T>) bundle.get(DATA_CLASS);
+                        return readListFromDatabase(key, dataClass);
+                    }
+                })
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(callback);
     }
 
 
@@ -329,12 +393,9 @@ public final class Panther {
      * @param key key
      * @return data
      */
+    @NonNull
     public String readStringFromDatabase(String key) {
-        String data = readFromDatabase(key, String.class);
-        if (data == null) {
-            data = "";
-        }
-        return data;
+        return readStringFromDatabase(key, "");
     }
 
     /**
@@ -344,9 +405,10 @@ public final class Panther {
      * @param defaultValue default value
      * @return data
      */
-    public String readStringFromDatabase(String key, String defaultValue) {
+    @NonNull
+    public String readStringFromDatabase(String key, @NonNull String defaultValue) {
         String data = readFromDatabase(key, String.class);
-        if (TextUtils.isEmpty(data)) {
+        if (data == null) {
             data = defaultValue;
         }
         return data;
@@ -359,7 +421,8 @@ public final class Panther {
      * @param defaultValue defaultValue
      * @return data
      */
-    public int readIntFromDatabase(String key, int defaultValue) {
+    @NonNull
+    public Integer readIntFromDatabase(String key, @NonNull Integer defaultValue) {
         Integer data = readFromDatabase(key, Integer.class);
         if (data == null) {
             return defaultValue;
@@ -375,7 +438,8 @@ public final class Panther {
      * @param defaultValue defaultValue
      * @return data
      */
-    public long readLongFromDatabase(String key, long defaultValue) {
+    @NonNull
+    public Long readLongFromDatabase(String key, @NonNull Long defaultValue) {
         Long data = readFromDatabase(key, Long.class);
         if (data == null) {
             return defaultValue;
@@ -391,7 +455,8 @@ public final class Panther {
      * @param defaultValue defaultValue
      * @return data
      */
-    public double readDoubleFromDatabase(String key, double defaultValue) {
+    @NonNull
+    public double readDoubleFromDatabase(String key, @NonNull Double defaultValue) {
         Double data = readFromDatabase(key, Double.class);
         if (data == null) {
             return defaultValue;
@@ -407,7 +472,8 @@ public final class Panther {
      * @param defaultValue defaultValue
      * @return data
      */
-    public boolean readBooleanFromDatabase(String key, boolean defaultValue) {
+    @NonNull
+    public boolean readBooleanFromDatabase(String key, @NonNull Boolean defaultValue) {
         Boolean data = readFromDatabase(key, Boolean.class);
         if (data == null) {
             return defaultValue;
@@ -417,7 +483,7 @@ public final class Panther {
     }
 
     /**
-     * Delete data from database, core method, synchronously
+     * Delete data from database, database method, synchronously
      *
      * @param key key
      */
@@ -425,7 +491,7 @@ public final class Panther {
         try {
             databaseOperationPreCheck(key);
             synchronized (database) {
-                database.del(key);
+                database.get().del(key);
             }
             log("{ key = " + key + " } delete from database finished");
             return true;
@@ -441,10 +507,17 @@ public final class Panther {
      * @param key      key
      * @param callback callback
      */
-    public void deleteFromDatabaseAsync(String key, DeleteCallback callback) {
-        DeleteBundle deleteBundle = new DeleteBundle(key, callback);
-        dataMedium.put(Constant.DELETE_KEY_PREFIX + key, deleteBundle);
-        callOnWorkHandler(Constant.MSG_WORK_DELETE, key);
+    public void deleteFromDatabaseAsync(String key, DataBaseSuccessObserver callback) {
+        Observable.just(key)
+                .map(new Function<String, Boolean>() {
+                    @Override
+                    public Boolean apply(String key) throws Exception {
+                        return deleteFromDatabase(key);
+                    }
+                })
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(callback);
     }
 
     /**
@@ -453,17 +526,51 @@ public final class Panther {
      * @param keys     keys
      * @param callback callback
      */
-    public void massDeleteFromDatabaseAsync(String[] keys, MassDeleteCallback callback) {
-        if (keys != null && keys.length > 0) {
-            String key = String.valueOf(System.currentTimeMillis());
-            MassDeleteBundle massDeleteBundle = new MassDeleteBundle(keys, callback);
-            dataMedium.put(Constant.MASS_DELETE_KEY_PREFIX + key, massDeleteBundle);
-            callOnWorkHandler(Constant.MSG_WORK_MASS_DELETE, key);
-        } else {
-            if (callback != null) {
-                callback.onResult(false);
-            }
-        }
+    public void massDeleteFromDatabaseAsync(List<String> keys, DataBaseSuccessObserver callback) {
+        Observable.just(keys)
+                .map(new Function<List<String>, Boolean>() {
+                    @Override
+                    public Boolean apply(List<String> keys) throws Exception {
+                        if (keys == null)
+                            return false;
+                        boolean massDeleteSuccess = true;
+                        for (String key : keys) {
+                            // once failed, consider it as failed
+                            if (!deleteFromDatabase(key))
+                                massDeleteSuccess = false;
+                        }
+                        return massDeleteSuccess;
+                    }
+                })
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(callback);
+    }
+
+    /**
+     * Mass delete from database by prefix, asynchronously
+     *
+     * @param prefix   prefix
+     * @param callback callback
+     */
+    public void massDeleteByPrefixFromDatabaseAsync(String prefix, DataBaseSuccessObserver callback) {
+        Observable.just(prefix)
+                .map(new Function<String, Boolean>() {
+                    @Override
+                    public Boolean apply(String prefix) throws Exception {
+                        List<String> keys = findKeysByPrefix(prefix);
+                        boolean massDeleteSuccess = true;
+                        for (String key : keys) {
+                            // once failed, consider it as failed
+                            if (!deleteFromDatabase(key))
+                                massDeleteSuccess = false;
+                        }
+                        return massDeleteSuccess;
+                    }
+                })
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(callback);
     }
 
 
@@ -478,9 +585,10 @@ public final class Panther {
         try {
             databaseOperationPreCheck(key);
             synchronized (database) {
-                exist = database.exists(key);
+                exist = database.get().exists(key);
             }
-        } catch (Exception ignore) {
+        } catch (Exception e) {
+            logError("Find key exist failed", e);
         }
         log("{ key = " + key + " } exist = " + exist);
         return exist;
@@ -492,20 +600,22 @@ public final class Panther {
      * @param prefix prefix
      * @return keys
      */
-    public String[] findKeysByPrefix(String prefix) {
+    @NonNull
+    public List<String> findKeysByPrefix(String prefix) {
         String[] keys = null;
         try {
             databaseOperationPreCheck(prefix);
             synchronized (database) {
-                keys = database.findKeys(prefix);
+                keys = database.get().findKeys(prefix);
             }
-        } catch (Exception ignore) {
+        } catch (Exception e) {
+            logError("Find keys by prefix failed", e);
         }
         if (keys == null) {
             keys = new String[]{};
         }
         log("{ prefix = " + prefix + " } has " + keys.length + " keys");
-        return keys;
+        return Arrays.asList(keys);
     }
 
     /**
@@ -514,11 +624,17 @@ public final class Panther {
      * @param prefix   prefix
      * @param callback callback
      */
-    public void findKeysByPrefix(String prefix, FindKeysCallback callback) {
-        String key = String.valueOf(System.currentTimeMillis());
-        FindKeysByPrefixBundle findKeysByPrefixBundle = new FindKeysByPrefixBundle(prefix, callback);
-        dataMedium.put(Constant.FIND_KEYS_BY_PREFIX_KEY_PREFIX + key, findKeysByPrefixBundle);
-        callOnWorkHandler(Constant.MSG_WORK_FIND_KEYS_BY_PREFIX, key);
+    public void findKeysByPrefix(String prefix, DatabaseListObserver<String> callback) {
+        Observable.just(prefix)
+                .map(new Function<String, List<String>>() {
+                    @Override
+                    public List<String> apply(String prefix) throws Exception {
+                        return findKeysByPrefix(prefix);
+                    }
+                })
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(callback);
     }
 
 
@@ -530,13 +646,9 @@ public final class Panther {
      * @param strongly strongly or weak reference
      */
     public void writeInMemory(String key, Object data, boolean strongly) {
-        if (strongly) {
-            memoryCacheMap.put(key, data);
-        } else {
-            memoryCacheMap.put(key, new WeakReference<>(data));
-        }
+        memoryCache.put(key, data, strongly);
         log("{ key = " + key + " data = " + data + " } save in memory finished");
-        log("memory cache size: " + memoryCacheMap.size());
+        log("Memory cache size: " + memoryCache.size());
     }
 
     /**
@@ -557,40 +669,7 @@ public final class Panther {
      * @return data
      */
     public <V> V readFromMemory(String key, boolean strongly) {
-        V data = null;
-        Object dataTemp = memoryCacheMap.get(key);
-        if (strongly) {
-            if (dataTemp instanceof WeakReference) {
-                try {
-                    throw new IllegalArgumentException("You may have chosen the wrong reference type");
-                } catch (IllegalArgumentException e) {
-                    e.printStackTrace();
-                }
-            } else {
-                try {
-                    if (dataTemp != null)
-                        data = (V) dataTemp;
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        } else {
-            try {
-                if (dataTemp != null && !(dataTemp instanceof WeakReference)) {
-                    dataTemp = null;
-                    throw new IllegalArgumentException("You may have chosen the wrong reference type");
-                }
-            } catch (IllegalArgumentException e) {
-                e.printStackTrace();
-            }
-            if (dataTemp != null) {
-                try {
-                    data = ((WeakReference<V>) dataTemp).get();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        }
+        V data = memoryCache.get(key, strongly);
         log("{ key = " + key + " data = " + data + " } read from memory finished");
         return data;
     }
@@ -611,9 +690,9 @@ public final class Panther {
      * @param key key
      */
     public void deleteFromMemory(String key) {
-        memoryCacheMap.delete(key);
+        memoryCache.delete(key);
         log("{ key = " + key + " } delete from memory finished");
-        log("memory cache size: " + memoryCacheMap.size());
+        log("Memory cache size: " + memoryCache.size());
     }
 
     /**
@@ -621,209 +700,16 @@ public final class Panther {
      *
      * @return key array
      */
-    public String[] memoryCacheKeys() {
-        return memoryCacheMap.keySet();
+    public List<String> memoryCacheKeys() {
+        return Arrays.asList(memoryCache.keySet());
     }
 
     /**
      * Clear memory cache
      */
     public void clearMemoryCache() {
-        memoryCacheMap.clear();
-        log("memory cache clear finish");
-    }
-
-
-    /**
-     * Send message to work handler
-     *
-     * @param message message
-     * @param key     key with event prefix
-     */
-    private void callOnWorkHandler(int message, String key) {
-        callOnWorkHandler(message, key, Constant.MSG_SUBTYPE_NORMAL);
-    }
-
-    /**
-     * Send message to work handler
-     *
-     * @param message message
-     * @param key     key with event prefix
-     * @param subtype subtype
-     */
-    private void callOnWorkHandler(int message, String key, int subtype) {
-        Message msg = getWorkHandler().obtainMessage(message);
-        msg.obj = key;
-        msg.arg1 = subtype;
-        getWorkHandler().sendMessage(msg);
-    }
-
-    /**
-     * Handle job in main thread
-     *
-     * @param msg msg
-     */
-    private void handleMainMessage(Message msg) {
-        String key = (String) msg.obj;
-        switch (msg.what) {
-            case Constant.MSG_MAIN_SAVE_CALLBACK:
-                SaveBundle saveBundle = (SaveBundle) dataMedium.get(Constant.SAVE_KEY_PREFIX + key);
-                if (saveBundle != null) {
-                    dataMedium.remove(Constant.SAVE_KEY_PREFIX + key);
-                    if (saveBundle.callback != null)
-                        saveBundle.callback.onResult(saveBundle.success);
-                }
-                break;
-            case Constant.MSG_MAIN_READ_CALLBACK:
-                if (msg.arg1 == Constant.MSG_SUBTYPE_READ_ARRAY) {
-                    ReadArrayBundle readArrayBundle = (ReadArrayBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
-                    if (readArrayBundle != null) {
-                        dataMedium.remove(Constant.READ_KEY_PREFIX + key);
-                        if (readArrayBundle.callback != null) {
-                            boolean success = readArrayBundle.data != null;
-                            readArrayBundle.callback.onResult(success, readArrayBundle.data);
-                        }
-                    }
-                } else {
-                    ReadBundle readBundle = (ReadBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
-                    if (readBundle != null) {
-                        dataMedium.remove(Constant.READ_KEY_PREFIX + key);
-                        if (readBundle.callback != null) {
-                            boolean success = readBundle.data != null;
-                            readBundle.callback.onResult(success, readBundle.data);
-                        }
-                    }
-                }
-                break;
-            case Constant.MSG_MAIN_DELETE_CALLBACK:
-                DeleteBundle deleteBundle = (DeleteBundle) dataMedium.get(Constant.DELETE_KEY_PREFIX + key);
-                if (deleteBundle != null) {
-                    dataMedium.remove(Constant.DELETE_KEY_PREFIX + key);
-                    if (deleteBundle.callback != null)
-                        deleteBundle.callback.onResult(deleteBundle.success);
-                }
-                break;
-            case Constant.MSG_MAIN_MASS_DELETE_CALLBACK:
-                MassDeleteBundle massDeleteBundle = (MassDeleteBundle) dataMedium.get(Constant.MASS_DELETE_KEY_PREFIX + key);
-                if (massDeleteBundle != null) {
-                    dataMedium.remove(Constant.MASS_DELETE_KEY_PREFIX + key);
-                    if (massDeleteBundle.callback != null)
-                        massDeleteBundle.callback.onResult(massDeleteBundle.success);
-                }
-                break;
-            case Constant.MSG_MAIN_FIND_KEYS_BY_PREFIX_CALLBACK:
-                FindKeysByPrefixBundle findKeysByPrefixBundle = (FindKeysByPrefixBundle) dataMedium.get(Constant.FIND_KEYS_BY_PREFIX_KEY_PREFIX + key);
-                if (findKeysByPrefixBundle != null) {
-                    dataMedium.remove(Constant.FIND_KEYS_BY_PREFIX_KEY_PREFIX + key);
-                    if (findKeysByPrefixBundle.callback != null)
-                        findKeysByPrefixBundle.callback.onResult(findKeysByPrefixBundle.keys);
-                }
-                break;
-        }
-    }
-
-    /**
-     * Send message to work handler
-     *
-     * @param message message
-     * @param key     key with event prefix
-     */
-    private void callOnMainHandler(int message, String key) {
-        callOnMainHandler(message, key, Constant.MSG_SUBTYPE_NORMAL);
-    }
-
-    /**
-     * Send message to work handler
-     *
-     * @param message message
-     * @param key     key with event prefix
-     * @param subtype subtype
-     */
-    private void callOnMainHandler(int message, String key, int subtype) {
-        Message msg = getMainHandler().obtainMessage(message);
-        msg.obj = key;
-        msg.arg1 = subtype;
-        getMainHandler().sendMessage(msg);
-    }
-
-    /**
-     * Handle job in work thread
-     *
-     * @param msg msg
-     */
-    private void handleWorkMessage(Message msg) {
-        String key = (String) msg.obj;
-        switch (msg.what) {
-            case Constant.MSG_WORK_SAVE:
-                SaveBundle saveBundle = (SaveBundle) dataMedium.get(Constant.SAVE_KEY_PREFIX + key);
-                if (saveBundle != null) {
-                    saveBundle.success = writeInDatabase(saveBundle.key, saveBundle.data);
-                    callOnMainHandler(Constant.MSG_MAIN_SAVE_CALLBACK, key);
-                }
-                break;
-            case Constant.MSG_WORK_READ:
-                if (msg.arg1 == Constant.MSG_SUBTYPE_READ_ARRAY) {
-                    ReadArrayBundle readArrayBundle = (ReadArrayBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
-                    if (readArrayBundle != null) {
-                        readArrayBundle.data = readArrayFromDatabase(readArrayBundle.key, readArrayBundle.dataClass);
-                        callOnMainHandler(Constant.MSG_MAIN_READ_CALLBACK, key, msg.arg1);
-                    }
-                } else {
-                    ReadBundle readBundle = (ReadBundle) dataMedium.get(Constant.READ_KEY_PREFIX + key);
-                    if (readBundle != null) {
-                        readBundle.data = readFromDatabase(readBundle.key, readBundle.dataClass);
-                        callOnMainHandler(Constant.MSG_MAIN_READ_CALLBACK, key);
-                    }
-                }
-                break;
-            case Constant.MSG_WORK_DELETE:
-                DeleteBundle deleteBundle = (DeleteBundle) dataMedium.get(Constant.DELETE_KEY_PREFIX + key);
-                if (deleteBundle != null) {
-                    deleteBundle.success = deleteFromDatabase(deleteBundle.key);
-                    callOnMainHandler(Constant.MSG_MAIN_DELETE_CALLBACK, key);
-                }
-                break;
-            case Constant.MSG_WORK_MASS_DELETE:
-                MassDeleteBundle massDeleteBundle = (MassDeleteBundle) dataMedium.get(Constant.MASS_DELETE_KEY_PREFIX + key);
-                if (massDeleteBundle != null) {
-                    for (String k : massDeleteBundle.keys) {
-                        if (deleteFromDatabase(k)) {
-                            massDeleteBundle.success = true;
-                        }
-                    }
-                    callOnMainHandler(Constant.MSG_MAIN_MASS_DELETE_CALLBACK, key);
-                }
-                break;
-            case Constant.MSG_WORK_FIND_KEYS_BY_PREFIX:
-                FindKeysByPrefixBundle findKeysByPrefixBundle = (FindKeysByPrefixBundle) dataMedium.get(Constant.FIND_KEYS_BY_PREFIX_KEY_PREFIX + key);
-                if (findKeysByPrefixBundle != null) {
-                    findKeysByPrefixBundle.keys = findKeysByPrefix(findKeysByPrefixBundle.prefix);
-                    callOnMainHandler(Constant.MSG_MAIN_FIND_KEYS_BY_PREFIX_CALLBACK, key);
-                }
-                break;
-        }
-    }
-
-    private MainHandler getMainHandler() {
-        if (mainHandler == null || mainHandler.reference.get() == null) {
-            mainHandler = new MainHandler(this, Looper.getMainLooper());
-        }
-        return mainHandler;
-    }
-
-    private WorkHandler getWorkHandler() {
-        if (workThread == null || !workThread.isAlive() || workHandler == null || workHandler.reference.get() == null) {
-            workHandler = new WorkHandler(this, getWorkThread().getLooper());
-        }
-        return workHandler;
-    }
-
-    private HandlerThread getWorkThread() {
-        if (workThread == null || !workThread.isAlive()) {
-            workThread = new HandlerThread("panther", Process.THREAD_PRIORITY_BACKGROUND);
-            workThread.start();
-        }
-        return workThread;
+        memoryCache.clear();
+        log("Memory cache clear finish");
     }
 
     private void log(String content) {
@@ -834,39 +720,5 @@ public final class Panther {
     private void logError(String content, Throwable error) {
         if (configuration.logEnabled)
             Log.e("Panther", content, error);
-    }
-
-    private static class MainHandler extends Handler {
-        private final SoftReference<Panther> reference;
-
-        private MainHandler(Panther panther, Looper Looper) {
-            super(Looper);
-            reference = new SoftReference<>(panther);
-        }
-
-        @Override
-        public void handleMessage(Message msg) {
-            Panther panther = reference.get();
-            if (panther != null && msg != null) {
-                panther.handleMainMessage(msg);
-            }
-        }
-    }
-
-    private static class WorkHandler extends Handler {
-        private final SoftReference<Panther> reference;
-
-        private WorkHandler(Panther panther, Looper Looper) {
-            super(Looper);
-            reference = new SoftReference<>(panther);
-        }
-
-        @Override
-        public void handleMessage(Message msg) {
-            Panther panther = reference.get();
-            if (panther != null && msg != null) {
-                panther.handleWorkMessage(msg);
-            }
-        }
     }
 }

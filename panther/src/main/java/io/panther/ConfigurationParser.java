@@ -1,32 +1,30 @@
-package io.panther.util;
+package io.panther;
 
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
-
-import io.panther.PantherConfiguration;
-import io.panther.PantherModule;
-import io.panther.constant.Constant;
+import android.support.annotation.NonNull;
 
 /**
  * Created by LiShen on 2017/11/29.
- * NetworkConfiguration parser
+ * Panther Configuration parser
  */
 
-public class ConfigurationParser {
+class ConfigurationParser {
     private final Context context;
 
-    public ConfigurationParser(Context context) {
-        this.context = context;
+    ConfigurationParser(Context context) {
+        this.context = context.getApplicationContext();
     }
 
-    public PantherConfiguration parse() {
+    @NonNull
+    PantherConfiguration parse() {
         PantherConfiguration configuration = null;
         try {
             ApplicationInfo appInfo = context.getPackageManager().getApplicationInfo(
                     context.getPackageName(), PackageManager.GET_META_DATA);
             if (appInfo != null && appInfo.metaData != null) {
-                String className = appInfo.metaData.getString(Constant.PANTHER_MODULE_NAME, "");
+                String className = appInfo.metaData.getString(Panther.PANTHER_MODULE_NAME, "");
                 configuration = parseModule(className).applyConfiguration(context);
             }
         } catch (Exception e) {
