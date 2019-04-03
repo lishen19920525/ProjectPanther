@@ -2,23 +2,21 @@ package io.panther.demo;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.support.annotation.Nullable;
 import android.util.Log;
 import android.view.View;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
 import io.panther.Panther;
-import io.panther.callback.FindKeysCallback;
-import io.panther.callback.MassDeleteCallback;
-import io.panther.callback.ReadArrayCallback;
-import io.panther.callback.ReadCallback;
-import io.panther.callback.WriteCallback;
 import io.panther.demo.bean.Gender;
 import io.panther.demo.bean.StudentBean;
+import io.panther.observer.DataBaseSuccessObserver;
+import io.panther.observer.DatabaseListObserver;
+import io.panther.observer.DatabaseObserver;
 
 public class MainActivity extends Activity {
     private List<StudentBean> students = new ArrayList<>();
@@ -86,28 +84,29 @@ public class MainActivity extends Activity {
 
             Panther.get(getActivity()).readStringFromDatabase("stu_jack");
             Panther.get(getActivity()).readIntFromDatabase("test_1", 0);
-            Panther.get(getActivity()).readDoubleFromDatabase("test_2", 0);
+            Panther.get(getActivity()).readDoubleFromDatabase("test_2", 0D);
             Panther.get(getActivity()).readStringFromDatabase("test_3", "");
             Panther.get(getActivity()).readBooleanFromDatabase("test_4", false);
 
             StudentBean studentTemp = Panther.get(getActivity()).readFromDatabase("stu_jack", StudentBean.class);
             Log.i("studentJack", studentTemp.toString());
 
-            Panther.get(getActivity()).readFromDatabaseAsync("stu_james", StudentBean.class, new ReadCallback<StudentBean>() {
+            Panther.get(getActivity()).readFromDatabaseAsync("stu_james", StudentBean.class, new DatabaseObserver<StudentBean>() {
                 @Override
-                public void onResult(boolean success, StudentBean result) {
-                    Log.i("studentJames", result.toString());
+                public void onResult(@Nullable StudentBean value) {
+                    if (value != null) {
+                        Log.i("studentJames", value.toString());
+                    }
                 }
             });
 
-            Panther.get(getActivity()).writeInDatabaseAsync("students", students, new WriteCallback() {
+            Panther.get(getActivity()).writeInDatabaseAsync("students", students, new DataBaseSuccessObserver() {
                 @Override
                 public void onResult(boolean success) {
-                    Panther.get(getActivity()).readArrayFromDatabaseAsync("students", StudentBean.class, new ReadArrayCallback<StudentBean>() {
+                    Panther.get(getActivity()).readListFromDatabaseAsync("students", StudentBean.class, new DatabaseListObserver<StudentBean>() {
                         @Override
-                        public void onResult(boolean success, StudentBean[] result) {
-                            if (success) {
-                                List<StudentBean> students = Arrays.asList(result);
+                        public void onResult(@Nullable List<StudentBean> students) {
+                            if (students != null) {
                                 Log.i("students", students.size() + " student");
                                 for (StudentBean stu : students) {
                                     Log.i("sss", stu.toString());
@@ -123,18 +122,12 @@ public class MainActivity extends Activity {
             Panther.get(getActivity()).deleteFromDatabase("test_1");
             Log.i("test exist", Panther.get(getActivity()).keyExist("test_1") + "");
 
-            Panther.get(getActivity()).findKeysByPrefix("test", new FindKeysCallback() {
+            Panther.get(this).massDeleteByPrefixFromDatabaseAsync("test", new DataBaseSuccessObserver() {
                 @Override
-                public void onResult(String[] keys) {
-                    Panther.get(getActivity()).massDeleteFromDatabaseAsync(keys, new MassDeleteCallback() {
-                        @Override
-                        public void onResult(boolean b) {
-                            Log.i("test exist", Panther.get(getActivity()).keyExist("test_1") + "");
-                        }
-                    });
+                public void onResult(boolean success) {
+
                 }
             });
-
         } else if (v.getId() == R.id.btnMainMemoryCache) {
             // not weak ref
             Panther.get(this).writeInMemory("studentJack", studentJack, true);
