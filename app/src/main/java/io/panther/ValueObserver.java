@@ -1,23 +1,21 @@
-package io.panther.observer;
+package io.panther;
 
 import android.support.annotation.Nullable;
-
-import java.util.List;
 
 import io.reactivex.observers.DisposableObserver;
 
 /**
- * Data list callback
+ * Desc:
  * Project: ProjectPanther
  * Author: LiShen
- * Time: 2019/4/3 13:20
+ * Time: 2019-06-30 16:55
  */
-public abstract class DatabaseListObserver<T> extends DisposableObserver {
-    public abstract void onResult(@Nullable List<T> value);
+public abstract class ValueObserver<T> extends DisposableObserver<T> {
+    public abstract void onResult(@Nullable T result);
 
     @Override
-    public final void onNext(Object o) {
-        onResult((List<T>) o);
+    public final void onNext(T t) {
+        onResult(t);
     }
 
     @Override

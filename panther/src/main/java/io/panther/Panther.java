@@ -26,9 +26,6 @@ import android.util.Log;
 import java.util.Arrays;
 import java.util.List;
 
-import io.panther.observer.DataBaseSuccessObserver;
-import io.panther.observer.DatabaseListObserver;
-import io.panther.observer.DatabaseObserver;
 import io.panther.util.GZIPUtil;
 import io.panther.util.JSONUtil;
 import io.reactivex.Observable;
@@ -162,7 +159,7 @@ public final class Panther {
     /**
      * Save in database synchronously, core method
      * Not recommended to call for storing large data in the main thread
-     * Large data use {@link #writeInDatabaseAsync(String, Object, DataBaseSuccessObserver)}
+     * Large data use {@link #writeInDatabaseAsync(String, Object)}
      *
      * @param key  key
      * @param data data
@@ -220,15 +217,14 @@ public final class Panther {
     /**
      * Save in database asynchronously
      *
-     * @param key      key
-     * @param data     data
-     * @param callback callback
+     * @param key  key
+     * @param data data
      */
-    public void writeInDatabaseAsync(String key, Object data, DataBaseSuccessObserver callback) {
+    public Observable<Boolean> writeInDatabaseAsync(String key, Object data) {
         ArrayMap<String, Object> bundle = new ArrayMap<>();
         bundle.put(KEY, key);
         bundle.put(DATA, data);
-        Observable.just(bundle)
+        return Observable.just(bundle)
                 .map(new Function<ArrayMap<String, Object>, Boolean>() {
                     @Override
                     public Boolean apply(ArrayMap<String, Object> bundle) throws Exception {
@@ -239,15 +235,14 @@ public final class Panther {
                     }
                 })
                 .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(callback);
+                .observeOn(AndroidSchedulers.mainThread());
     }
 
 
     /**
      * Read from database synchronously, core method.
      * Not recommended to call for read large data in the main thread.
-     * Read large data use {@link #readFromDatabaseAsync(String, Class, DatabaseObserver)}
+     * Read large data use {@link #readFromDatabaseAsync(String, Class)}
      *
      * @param key       key
      * @param dataClass class of data
@@ -299,13 +294,12 @@ public final class Panther {
      *
      * @param key       key
      * @param dataClass class of data
-     * @param callback  callback
      */
-    public <T> void readFromDatabaseAsync(String key, Class<T> dataClass, DatabaseObserver<T> callback) {
+    public <T> Observable<T> readFromDatabaseAsync(String key, Class<T> dataClass) {
         ArrayMap<String, Object> bundle = new ArrayMap<>();
         bundle.put(KEY, key);
         bundle.put(DATA_CLASS, dataClass);
-        Observable.just(bundle)
+        return Observable.just(bundle)
                 .map(new Function<ArrayMap<String, Object>, T>() {
                     @Override
                     public T apply(ArrayMap<String, Object> bundle) throws Exception {
@@ -315,14 +309,13 @@ public final class Panther {
                     }
                 })
                 .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(callback);
+                .observeOn(AndroidSchedulers.mainThread());
     }
 
     /**
      * Read array data from database synchronously, database method.
      * Not recommended to call for read large data in the main thread.
-     * Read large data use {@link #readListFromDatabaseAsync(String, Class, DatabaseListObserver)}
+     * Read large data use {@link #readListFromDatabaseAsync(String, Class)}
      *
      * @param key       key
      * @param dataClass class of data
@@ -370,13 +363,12 @@ public final class Panther {
      *
      * @param key       key
      * @param dataClass class of data
-     * @param callback  callback
      */
-    public <T> void readListFromDatabaseAsync(String key, Class<T> dataClass, DatabaseListObserver<T> callback) {
+    public <T> Observable<List<T>> readListFromDatabaseAsync(String key, Class<T> dataClass) {
         ArrayMap<String, Object> bundle = new ArrayMap<>();
         bundle.put(KEY, key);
         bundle.put(DATA_CLASS, dataClass);
-        Observable.just(bundle)
+        return Observable.just(bundle)
                 .map(new Function<ArrayMap<String, Object>, List<T>>() {
                     @Override
                     public List<T> apply(ArrayMap<String, Object> bundle) throws Exception {
@@ -386,8 +378,7 @@ public final class Panther {
                     }
                 })
                 .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(callback);
+                .observeOn(AndroidSchedulers.mainThread());
     }
 
 
@@ -508,11 +499,10 @@ public final class Panther {
     /**
      * Delete data from database, asynchronously
      *
-     * @param key      key
-     * @param callback callback
+     * @param key key
      */
-    public void deleteFromDatabaseAsync(String key, DataBaseSuccessObserver callback) {
-        Observable.just(key)
+    public Observable<Boolean> deleteFromDatabaseAsync(String key) {
+        return Observable.just(key)
                 .map(new Function<String, Boolean>() {
                     @Override
                     public Boolean apply(String key) throws Exception {
@@ -520,18 +510,16 @@ public final class Panther {
                     }
                 })
                 .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(callback);
+                .observeOn(AndroidSchedulers.mainThread());
     }
 
     /**
      * Mass delete from database, asynchronously
      *
-     * @param keys     keys
-     * @param callback callback
+     * @param keys keys
      */
-    public void massDeleteFromDatabaseAsync(List<String> keys, DataBaseSuccessObserver callback) {
-        Observable.just(keys)
+    public Observable<Boolean> massDeleteFromDatabaseAsync(List<String> keys) {
+        return Observable.just(keys)
                 .map(new Function<List<String>, Boolean>() {
                     @Override
                     public Boolean apply(List<String> keys) throws Exception {
@@ -547,18 +535,16 @@ public final class Panther {
                     }
                 })
                 .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(callback);
+                .observeOn(AndroidSchedulers.mainThread());
     }
 
     /**
      * Mass delete from database by prefix, asynchronously
      *
-     * @param prefix   prefix
-     * @param callback callback
+     * @param prefix prefix
      */
-    public void massDeleteByPrefixFromDatabaseAsync(String prefix, DataBaseSuccessObserver callback) {
-        Observable.just(prefix)
+    public Observable<Boolean> massDeleteByPrefixFromDatabaseAsync(String prefix) {
+        return Observable.just(prefix)
                 .map(new Function<String, Boolean>() {
                     @Override
                     public Boolean apply(String prefix) throws Exception {
@@ -573,8 +559,7 @@ public final class Panther {
                     }
                 })
                 .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(callback);
+                .observeOn(AndroidSchedulers.mainThread());
     }
 
 
@@ -625,20 +610,18 @@ public final class Panther {
     /**
      * Return keys with same prefix from database, asynchronously
      *
-     * @param prefix   prefix
-     * @param callback callback
+     * @param prefix prefix
      */
-    public void findKeysByPrefix(String prefix, DatabaseListObserver<String> callback) {
-        Observable.just(prefix)
+    public Observable<List<String>> findKeysByPrefixAsync(String prefix) {
+        return Observable.just(prefix)
                 .map(new Function<String, List<String>>() {
                     @Override
-                    public List<String> apply(String prefix) throws Exception {
-                        return findKeysByPrefix(prefix);
+                    public List<String> apply(String prefix1) throws Exception {
+                        return findKeysByPrefix(prefix1);
                     }
                 })
                 .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(callback);
+                .observeOn(AndroidSchedulers.mainThread());
     }
 
 

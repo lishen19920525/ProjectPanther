@@ -12,11 +12,9 @@ import java.util.Date;
 import java.util.List;
 
 import io.panther.Panther;
+import io.panther.ValueObserver;
 import io.panther.demo.bean.Gender;
 import io.panther.demo.bean.StudentBean;
-import io.panther.observer.DataBaseSuccessObserver;
-import io.panther.observer.DatabaseListObserver;
-import io.panther.observer.DatabaseObserver;
 
 public class MainActivity extends Activity {
     private List<StudentBean> students = new ArrayList<>();
@@ -100,24 +98,24 @@ public class MainActivity extends Activity {
             StudentBean studentTemp = Panther.get(getActivity()).readFromDatabase("stu_jack", StudentBean.class);
             Log.i("studentJack", studentTemp.toString());
 
-            Panther.get(getActivity()).readFromDatabaseAsync("stu_james", StudentBean.class, new DatabaseObserver<StudentBean>() {
+            Panther.get(getActivity()).readFromDatabaseAsync("stu_james", StudentBean.class).safeSubscribe(new ValueObserver<StudentBean>() {
                 @Override
-                public void onResult(@Nullable StudentBean value) {
-                    if (value != null) {
-                        Log.i("studentJames", value.toString());
+                public void onResult(@Nullable StudentBean result) {
+                    if (result != null) {
+                        Log.i("student", "result = " + result.toString());
                     }
                 }
             });
 
-            Panther.get(getActivity()).writeInDatabaseAsync("students", students, new DataBaseSuccessObserver() {
+            Panther.get(getActivity()).writeInDatabaseAsync("students", students).safeSubscribe(new ValueObserver<Boolean>() {
                 @Override
-                public void onResult(boolean success) {
-                    Panther.get(getActivity()).readListFromDatabaseAsync("students", StudentBean.class, new DatabaseListObserver<StudentBean>() {
+                public void onResult(@Nullable Boolean result) {
+                    Panther.get(getActivity()).readListFromDatabaseAsync("students", StudentBean.class).safeSubscribe(new ValueObserver<List<StudentBean>>() {
                         @Override
-                        public void onResult(@Nullable List<StudentBean> students) {
-                            if (students != null) {
-                                Log.i("students", students.size() + " student");
-                                for (StudentBean stu : students) {
+                        public void onResult(@Nullable List<StudentBean> result) {
+                            if (result != null) {
+                                Log.i("students", result.size() + " student");
+                                for (StudentBean stu : result) {
                                     Log.i("sss", stu.toString());
                                 }
                             }
@@ -131,9 +129,9 @@ public class MainActivity extends Activity {
             Panther.get(getActivity()).deleteFromDatabase("test_1");
             Log.i("test exist", Panther.get(getActivity()).keyExist("test_1") + "");
 
-            Panther.get(this).massDeleteByPrefixFromDatabaseAsync("test", new DataBaseSuccessObserver() {
+            Panther.get(this).massDeleteByPrefixFromDatabaseAsync("test").safeSubscribe(new ValueObserver<Boolean>() {
                 @Override
-                public void onResult(boolean success) {
+                public void onResult(@Nullable Boolean result) {
 
                 }
             });
