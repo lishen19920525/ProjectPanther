@@ -178,6 +178,10 @@ public final class Panther {
             // to Json string
             if (data instanceof String) {
                 dataJson = (String) data;
+                if (TextUtils.isEmpty(dataJson)) {
+                    deleteFromDatabase(key);
+                    return true;
+                }
             } else {
                 dataJson = JSONUtil.toJSONString(data);
             }
